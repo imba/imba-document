@@ -387,6 +387,9 @@ var MonarchTokenizer = (function () {
                 lastToken = token;
             }
         }
+        if (lastToken && !lastToken.value) {
+            lastToken.value = line.slice(lastToken.offset - offsetDelta, -1);
+        }
         return MonarchLineStateFactory.create(stack);
     };
     return MonarchTokenizer;

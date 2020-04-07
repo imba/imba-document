@@ -40,7 +40,6 @@ class Hello
 	def render
 		"string \{10\}"
 		'string'
-		\`string \{10\}\`
 		true
 	
 	def again one, two
@@ -78,7 +77,7 @@ let locs = []
 while source.indexOf('§') >= 0
 	let idx = source.indexOf('§')
 	locs.push(idx)
-	source = source.slice(0,idx) + source.slice(idx + 1)
+	source = source.slice(0,idx) + source.slice(idx + 2)
 
 console.log locs
 
