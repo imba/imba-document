@@ -1,0 +1,8 @@
+{
+	"entries": {
+		"./src/index.imba": {
+			"file": "./index.js",
+			"format": "esm"
+		}
+	}
+}

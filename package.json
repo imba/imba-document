@@ -1,0 +1,21 @@
+{
+  "name": "imba-document",
+  "version": "0.1.0",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/imba/imba-document.git"
+  },
+  "scripts": {
+    "build": "imba-rollup",
+    "dev": "cd test && imba-rollup --watch --serve --hmr",
+    "watch": "imba-rollup --watch",
+    "check-version": "imbac --version"
+  },
+  "main": "./index.js",
+  "devDependencies": {
+    "imba": "^2.0.0-alpha.41",
+    "imba-rollup": "^2.0.0-alpha.41"
+  },
+  "dependencies": {}
+}

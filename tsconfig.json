@@ -1,0 +1,19 @@
+{
+	"compilerOptions": {
+		"module": "ES6",
+		"moduleResolution": "node",
+		"experimentalDecorators": true,
+		"noImplicitReturns": true,
+		"noUnusedLocals": true,
+		"strict": true,
+		"forceConsistentCasingInFileNames": true,
+		"removeComments": true,
+		"baseUrl": "./src/monarch",
+		"lib": [
+			"ES2015",
+			"ES2017.String",
+			"ES2018.Promise",
+			"DOM"
+		]
+	}
+}

@@ -1,0 +1,10 @@
+{
+	"entries": {
+		"./app.imba": {
+			"file": "./app.imba.js",
+			"format": "esm",
+        	"name": "bundle",
+        	"sourcemap": true
+		}
+	}
+}
