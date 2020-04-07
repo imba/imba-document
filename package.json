@@ -1,6 +1,8 @@
 {
   "name": "imba-document",
   "version": "0.1.0",
+  "license": "MIT",
+	"author": "Sindre Aarsaether",
   "repository": {
     "type": "git",
     "url": "git://github.com/imba/imba-document.git"
