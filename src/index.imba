@@ -3,6 +3,30 @@ import { Document } from './document'
 
 const newline = String.fromCharCode(172)
 
+const GlobalVars = {
+	'global': 1
+	'imba': 1
+	'module': 1
+	'window': 1
+	'document': 1
+	'exports': 1
+	'console': 1
+	'process': 1
+	'parseInt': 1
+	'parseFloat': 1
+	'setTimeout': 1
+	'setInterval': 1
+	'setImmediate': 1
+	'clearTimeout': 1
+	'clearInterval': 1
+	'clearImmediate': 1
+	'globalThis': 1
+	'isNaN': 1
+	'isFinite': 1
+	'__dirname': 1
+	'__filename': 1
+}
+
 const ScopeTypes = {
 	def:   {closure: yes, matcher: /(static)?\s*def ([\w\-\$]+\??)/}
 	get:   {closure: yes, matcher: /(static)?\s*get ([\w\-\$]+\??)/}
@@ -56,6 +80,9 @@ class Variables
 		let res = map[name]
 		if deep and !res and scope.parent
 			return scope.parent.variables.lookup(name)
+		if !scope.parent and !res and GlobalVars[name]
+			let tok = {value: name, varscope: scope, type: 'variable.global'}
+			return map[name] = tok.variable = tok
 		return res
 
 class TokenScope
@@ -76,6 +103,7 @@ class TokenScope
 			for mod in m.slice(1,-1)
 				self[mod] = true if mod
 		
+
 		parent = parent
 		return self
 	
@@ -451,13 +479,13 @@ export class ImbaDocument < Document
 				if value[0] == '@'
 					value = value.replace(/^\@/,'_')
 				elif (/^(\n|\s\:|\)|\,|\.)/).test(source.slice(end)) and !token.access
-					value = value + '!'
+					if value[0] == value[0].toLowerCase!
+						value = value + '!'
 
 
 			if type == 'identifier' and value[0] == value[0].toLowerCase! and value[0] != '_'
 				if !token.variable and (/^(\n|\s\:|\)|\,|\.)/).test(source.slice(end))
 					value = value + '!'
-			
 
 			token.value = value
 
