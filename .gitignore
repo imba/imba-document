@@ -15,3 +15,4 @@ public/css/**/*.css
 index.js
 test/*.imba.js
 test/*.imba.js.map
+test/docs/*

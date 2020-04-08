@@ -49,6 +49,7 @@ class Variables
 	def add token
 		tokens.push(token)
 		token.variable = token
+		token.varscope = scope
 		map[token.value] = token
 	
 	def lookup name, deep = yes
@@ -69,7 +70,6 @@ class TokenScope
 
 		if token.type.match(/(\w+)\.open/)
 			pair = token.type.replace('open','close')
-
 
 		if let m = (meta.matcher and line.lineContent.match(meta.matcher))
 			name = m[m.length - 1]
@@ -116,8 +116,8 @@ class TokenScope
 
 export class ImbaDocument < Document
 	def constructor ...params
-		super
-		
+		super(...params)
+
 		lineTokens = []
 		tokens = []
 		rootScope = TokenScope.new(doc: self, token: {offset: 0, type: 'root'}, type: 'root', line: {indent: -1}, parent: null)
@@ -154,6 +154,10 @@ export class ImbaDocument < Document
 				if connection
 					connection.sendNotification('closeAngleBracket',{uri: uri})
 		return
+	
+	def overwrite
+		super
+		invalidateFromLine(0)
 
 	def after token
 		let idx = tokens.indexOf(token)
@@ -208,6 +212,10 @@ export class ImbaDocument < Document
 			break if token.offset >= offset
 			prev = token
 		return prev or token
+
+	def getSemanticTokens
+		getTokens!
+		tokens.filter do !!$1.variable
 
 	def getContextAtOffset offset, forwardLooking = no
 		let pos = positionAt(offset)
@@ -394,7 +402,7 @@ export class ImbaDocument < Document
 
 						if lastVarRef and lastVarRef.variable == variable
 							let between = code.slice(lastVarRef.offset + lastVarRef.value.length - offset,tok.offset - offset)
-							if between.match(/\s*\=\s*/)
+							if between.match(/^\s*\=\s*$/) and (!next or code.slice(to).match(/^\s*[\,\)]/))
 								if lastVarRef == variable
 									tok.variable = null
 								else
@@ -413,3 +421,45 @@ export class ImbaDocument < Document
 
 		var elapsed = Date.now! - t
 		return tokens
+
+
+	def migrateToImba2
+		let source = self.content
+		source = source.replace(/\bdef self\./g,'static def ')
+		source = source.replace(/\b(var|let|const) def /g,'def ')
+
+		# convert tag.@dom and dom.@tag
+
+		let doc = ImbaDocument.new('','imba',0,source)
+		let tokens = doc.getTokens!
+
+		for token,i in tokens
+			let next = tokens[i + 1]
+			let {value,type,offset} = token
+			let end = offset + value.length
+			if type == 'operator.dot.legacy'
+				value = '.'
+				next.access = true if next
+
+			if type == 'operator.spread.legacy'
+				value = '...'
+			
+			if type == 'decorator'
+				value = '_' + value.slice(1)
+			
+			if type == 'property'
+				if value[0] == '@'
+					value = value.replace(/^\@/,'_')
+				elif (/^(\n|\s\:|\)|\,|\.)/).test(source.slice(end)) and !token.access
+					value = value + '!'
+
+
+			if type == 'identifier' and value[0] == value[0].toLowerCase! and value[0] != '_'
+				if !token.variable and (/^(\n|\s\:|\)|\,|\.)/).test(source.slice(end))
+					value = value + '!'
+			
+
+			token.value = value
+
+		return tokens.map(do $1.value).join('')
+	

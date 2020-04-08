@@ -75,12 +75,10 @@ export class Document
 		var nextLineOffset = (position.line + 1 < lineOffsets.length) ? lineOffsets[position.line + 1] : content.length
 		return Math.max(Math.min(lineOffset + position.character, nextLineOffset), lineOffset)
 
-	def overwrite body
-		version++
+	def overwrite body,newVersion
+		version = newVersion or (version + 1)
 		content = body
 		_lineOffsets = null
-		if tokens
-			tokens.invalidateFromLine(0)
 		return self
 
 	def update changes, version
@@ -89,10 +87,7 @@ export class Document
 		# many changes will be a single character etc
 		for change,i in changes
 			if editIsFull(change)
-				content = change.text
-				_lineOffsets = null
-				log 'full textdocument change',version
-				tokens.invalidateFromLine(0) if tokens
+				overwrite(change.text,version)
 				continue
 
 			var range = getWellformedRange(change.range)

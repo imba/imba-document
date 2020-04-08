@@ -10,7 +10,7 @@ const newline = String.fromCharCode(172)
 var eolpop = [/^/, token: '@rematch', next: '@pop']
 
 export var grammar = {
-	defaultToken: 'white',
+	defaultToken: 'invalid',
 	ignoreCase: false,
 	tokenPostfix: '',
 	brackets: [
@@ -20,7 +20,7 @@ export var grammar = {
 	],
 	keywords: [
 		'def', 'and', 'or', 'is', 'isnt', 'not', 'on', 'yes', '@', 'no', 'off',
-		'true', 'false', 'null', 'this', 'self',
+		'true', 'false', 'null', 'this', 'self','as'
 		'new', 'delete', 'typeof', 'in', 'instanceof',
 		'return', 'throw', 'break', 'continue', 'debugger',
 		'if', 'elif', 'else', 'switch', 'for', 'while', 'do', 'try', 'catch', 'finally',
@@ -37,7 +37,7 @@ export var grammar = {
 		'=', '!', '~', '?', ':','!!',
 		'&', '|', '^', '%', '<<',
 		'>>', '>>>', '+=', '-=', '*=', '/=', '&=', '|=', '?=',
-		'^=', '%=', '<<=', '>>=', '>>>=','..','...'
+		'^=', '%=', '<<=', '>>=', '>>>=','..','...','||='
 	],
 	logic: [
 		'>', '<', '==', '<=', '>=', '!=', '&&', '||','===','!=='
@@ -58,6 +58,7 @@ export var grammar = {
 	methodName: /[A-Za-z\_][A-Za-z\d\-\_]*\=?/
 	identifier: /[a-z_][A-Za-z\d\-\_]*/
 	anyIdentifier: /[A-Za-z_\$][A-Za-z\d\-\_\$]*/
+	esmIdentifier: /\@?[A-Za-z_\$][A-Za-z\d\-\_\$]*/
 	variable: /[\w\$]+(?:-[\w\$]*)*/
 	varKeyword: /var|let|const/
 	newline: RegExp.new(newline)
@@ -78,7 +79,18 @@ export var grammar = {
 			{ include: '@whitespace' }
 		]
 
+		legacy_access: [
+			[/(\:)(\@?@anyIdentifier)/, ['operator.dot.legacy','property']],
+		]
+
+		spread: [
+			[/\.\.\./,'operator.spread']
+			[/(\*)(?=[\w\$])/,'operator.spread.legacy']
+		]
+
 		expression: [
+			{ include: 'legacy_access'}
+			{ include: 'spread' }
 			{ include: 'do' }
 			{ include: 'access' }
 			{ include: 'identifiers' }
@@ -91,7 +103,8 @@ export var grammar = {
 			{ include: 'comments' }
 			{ include: 'common' }
 			{ include: 'operators' }
-			
+			{ include: 'decorator' }
+
 			[/\(/, 'delimiter.parens.open', '@parens']
 		]
 
@@ -99,13 +112,13 @@ export var grammar = {
 			[/(do)(\()/, [{token: 'keyword.$1'},{token: 'argparam.open', next: '@var_parens.argparam'}]],
 		]
 
-		scopes: [
-			[/(def|get|set|if|unless|while|for|class|tag|do) /,token: '@rematch',next: 'scope.$1']
+		access: [
+			[/(\.)(\@?@anyIdentifier)(\s+)(?=\S)/, ['operator.dot','property',{token: 'white', next: '@implicit_params'}]],
+			[/(\.)(\@?@anyIdentifier)/, ['operator.dot','property']],
 		]
 
-		access: [
-			[/(\.)(@anyIdentifier)(\s+)(?=\S)/, ['operator.dot','property',{token: 'white', next: '@implicit_params'}]],
-			[/(\.)(@anyIdentifier)/, ['operator.dot','property']],
+		decorator: [
+			[/\@(@anyIdentifier)?/, 'decorator'],
 		]
 
 		implicit_params: [
@@ -158,7 +171,7 @@ export var grammar = {
 			[/\)/, 'delimiter.parens.close', '@pop']
 			{include: 'var_expr'}
 			{include: 'expression'}
-			[/\,/, 'delimiter']
+			[/\,/, 'delimiterz']
 		]
 
 		statements: [
@@ -167,6 +180,7 @@ export var grammar = {
 			{ include: 'prop_statement' }
 			{ include: 'def_statement' }
 			{ include: 'class_statement' }
+			{ include: 'import_statement' }
 			{ include: 'expression'}
 		]
 
@@ -204,6 +218,27 @@ export var grammar = {
 			[/(tag)(\s)(@identifier)(\s)(?=\{|\w|\[)/, [{token: 'keyword.$1'},'white.classname',{token: 'identifier.$1.name'}]],
 		]
 
+		import_body: [
+			eolpop
+			[/(\*)(\s+)(as)(\s+)(@esmIdentifier)/, ['keyword.star','white','keyword.as','white','variable.imports']],
+			[/(@esmIdentifier)(\s+)(as)(\s+)(@esmIdentifier)/, ['alias','white','keyword.as','white','variable.imports']],
+			[/from/, 'keyword.from'],
+			[/\{/,'imports.open','@esm_specifiers.imports']
+			[/(@esmIdentifier)/,'variable.imports'],
+			{include: 'string_start'}
+		]
+
+		esm_specifiers: [
+			[/\}/, '$S2.close', '@pop']
+			[/(@esmIdentifier)(\s+)(as)(\s+)(@esmIdentifier)/, ['alias','white','keyword.as','white',{token: 'variable.$S2'}]]
+			[/(@esmIdentifier)/, token: 'variable.$S2']
+			[/\,/,'delimiter']
+		]
+
+		import_statement: [
+			[/(import)/,'keyword.import','@import_body.start']
+		]
+
 		object: [
 			[/\{/, 'delimiter.bracket.open', '@object']
 			[/\}/, 'delimiter.bracket.close', '@pop']
@@ -212,7 +247,7 @@ export var grammar = {
 			{ include: 'string_start' }
 			{ include: 'comments' }
 			[/:/,'delimiter.object.value','@object_value']
-			[/,/,'delimiter']
+			[/\,/,'delimiter']
 		]
 
 		object_start: [
@@ -240,7 +275,7 @@ export var grammar = {
 			[/\}/, 'object.close', '@pop']
 			[/(@identifier)/, token: 'variable.$S2']
 			{ include: 'common' }
-			[/,/,'delimiter']
+			[/\,/,'delimiter']
 		]
 
 		var_array: [
@@ -250,7 +285,7 @@ export var grammar = {
 			[/\]/, 'array.close', '@pop']
 			[/(@identifier)/, token: 'variable.$S2']
 			{ include: 'common' }
-			[/,/,'delimiter']
+			[/\,/,'delimiter']
 		]		
 
 		object_value: [
@@ -275,6 +310,7 @@ export var grammar = {
 			[/(,)(@newline)/,['delimiter','newline']]
 			[/@newline/, token: '@rematch', next: '@pop']
 			[/(?=\n)/,'delimiter','@pop']
+			{ include: 'spread' }
 			{ include: 'common' }
 			{ include: 'type_start' }
 			{ include: 'comments' }
@@ -300,7 +336,6 @@ export var grammar = {
 			[/(class|tag)(?=\s)/, { token: 'keyword.$1', next: '@declstart.$1'}],
 			[/(def|get|set)(?=\s)/, { token: 'keyword.$1', next: '@defstart.$1'}],
 			[/(prop|attr)(?=\s)/, { token: 'keyword.$1', next: '@propstart.$1'}],
-			[/(import)(?=\s)/, { token: 'keyword.$1', next: '@importstart.$1'}],
 
 			[/([a-z]\w*)(:?(?!\w))/, {
 				cases: {
@@ -313,9 +348,6 @@ export var grammar = {
 					'@default': ['identifier','delimiter']
 				}
 			}],
-
-			# identifiers and keywords
-			[/\@(@anyIdentifier)?/, 'decorator'],
 			[/\$\w+\$/, 'identifier.env'],
 			[/\$\d+/, 'identifier.special'],
 			[/\$[a-zA-Z_]\w*/, 'identifier.sys'],
@@ -327,14 +359,10 @@ export var grammar = {
 			
 			# whitespace
 			{ include: '@whitespace' },
-			
-			# Comments
-			[/### (javascript|compiles to)\:/, { token: 'comment', next: '@js_comment', nextEmbedded: 'text/javascript' }]
-
 			{ include: '@comments' },
+
 			[/(\:)([\@\w\-\_]+)/, ['symbol.start','symbol']],
 			[/\$\d+/, 'entity.special.arg'],
-			[/\&/, 'operator'],
 
 			# regular expressions
 			[/\/(?!\ )(?=([^\\\/]|\\.)+\/)/, { token: 'regexp.slash', bracket: '@open', next: '@regexp'}],
@@ -344,6 +372,7 @@ export var grammar = {
 						'$S2==interpolatedstring': { token: 'string.bracket.close', next: '@pop' },
 						'@default': '@brackets' } }],
 			[/[\{\}\(\)\[\]]/, '@brackets'],
+
 			{ include: '@operators' },
 			
 			# numbers
@@ -371,6 +400,8 @@ export var grammar = {
 			[/\d+/, 'number'],
 		],
 		operators: [
+			{include: 'spread'}
+			[/,/,'delimiter']
 			[/@symbols/, { cases: {
 						'@operators': 'operator',
 						'@math': 'operator.math',
@@ -387,8 +418,8 @@ export var grammar = {
 		comments: [
 			[/###\s(css)/, {token: 'style.$1.open'}, '@style.$1'],
 			[/###/, {token: 'comment.block.open'}, '@comment.block'],
-			[/#(\s[^@newline]*)?$/, 'comment'],
-			[/\/\/([^@newline]*)?$/, 'comment'],
+			[/#(\s.+)?$/, 'comment'],
+			[/\/\/(.+)$/, 'comment'],
 		],
 
 		comment: [
@@ -448,16 +479,6 @@ export var grammar = {
 			[/(\))(\:?)/, ['paren.close.tag','delimiter.colon'], '@pop' ],
 			{ include: 'body' }
 		],
-		importstart: [
-			[/^./, token: '@rematch', next: '@pop'],
-			[/(from|as)/, { token: 'keyword.$1'}],
-			[/[\{\}\,]/, { token: 'keyword'}],
-			[/"""/, 'string', '@herestring."""'],
-			[/'''/, 'string', '@herestring.\'\'\''],
-			[/"/, { token: 'string', next: '@string."' }],
-			[/'/, { token: 'string', next: '@string.\'' }],
-			[/[a-z_A-Z][A-Za-z\d\-\_]*/, token: 'identifier.import']
-		]
 
 		braces: [
 			['}', { token: 'brace.close', next: '@pop' }],
