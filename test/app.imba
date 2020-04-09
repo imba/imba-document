@@ -4,6 +4,16 @@ import sample from './docs/test.imba.raw'
 
 class EditableEvent < CustomEvent
 
+const replacements = {
+	'&': '&amp;',
+	'<': '&lt;',
+	'>': '&gt;',
+	'"': '&quot;',
+	"'": '&#39;'
+};
+
+def escape str
+	str.replace(/[\&\<\>]/g) do(m) replacements[m]
 
 def highlight tokens
 	let parts = []
@@ -20,7 +30,7 @@ def highlight tokens
 				types.push("scope_{token.variable.varscope.type}")
 
 		if typ != 'white' and typ != 'line'
-			value = "<span class='{types.join(' ')}'>{value}</span>"
+			value = "<span class='{types.join(' ')}'>{escape(value)}</span>"
 
 		if true
 			yes
@@ -36,8 +46,8 @@ def highlight tokens
 
 
 # let content = migrateLegacyDocument(sample.body)
-let content = ImbaDocument.tmp(sample.body).migrateToImba2!
-let doc = ImbaDocument.new('/source.imba','imba',1,content)
+let original = ImbaDocument.tmp(sample.body)
+let doc = ImbaDocument.new('/source.imba','imba',1,original.migrateToImba2!)
 
 tag app-root
 
@@ -66,6 +76,7 @@ tag app-root
 		<self.hbox.grow :selectstart.reselected :stuff.handleCustom>
 			<button :click.sendCustom> "custom!"
 			<pre> <code innerHTML=highlight(doc.getTokens!) contentEditable='true' spellcheck=false>
+			# <pre> <code innerHTML=highlight(original.getTokens!) contentEditable='true' spellcheck=false>
 
 ### css
 
@@ -83,6 +94,7 @@ tag app-root
 	--variable: #e8e6cb;
 	--string: #c6f6d5;
 	--entity: #8ab9ff;
+	--regexp: #e9e19b;
 	--this: #63b3ed;
 	--tag: #e9e19b;
 	--tag-angle: #9d9755;
@@ -109,6 +121,7 @@ pre,code {
 }
 .invalid { color: red; }
 .comment { color: var(--comment); }
+.regexp { color: var(--regexp); }
 .tag { color: var(--tag); }
 .type { color: var(--type); }
 .keyword,.argparam { color: var(--keyword); }

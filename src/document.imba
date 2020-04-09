@@ -569,11 +569,38 @@ export class ImbaDocument
 		let source = self.content
 		source = source.replace(/\bdef self\./g,'static def ')
 		source = source.replace(/\b(var|let|const) def /g,'def ')
+		source = source.replace(/\?\./g,'..')
+
+		source = source.replace(/def ([\w\-]+)\=/g,'set $1')
+
+		source = source.replace(/do\s?\|([^\|]+)\|/g,'do($1)')
+
+		source = source.replace(/(prop) ([\w\-]+) (.+)$/gm) do(m,typ,name,rest)
+			let opts = {}
+			rest.split(/,\s*/).map(do $1.split(/\:\s*/)).map(do opts[$1[0]] = $1[1] )
+			let out = "{typ} {name}"
+
+			if opts.watch and opts.watch[0].match(/[\'\"\:]/)
+				out = "@watch({opts.watch}) {out}"
+			elif opts.watch
+				out = "@watch {out}"
+			
+			delete opts.watch
+			
+			if opts.default
+				out = "{out} = {opts.default}"
+				delete opts.default
+
+			if Object.keys(opts).length
+				console.log 'more prop values',m,opts
+			return out
 
 		let doc = ImbaDocument.tmp(source)
 		let tokens = doc.getTokens!
+		let ivarPrefix = ''
 
 		for token,i in tokens
+
 			let next = tokens[i + 1]
 			let {value,type,offset} = token
 			let end = offset + value.length
@@ -587,21 +614,24 @@ export class ImbaDocument
 			if type == 'identifier.tagname'
 				if value.indexOf(':') >= 0
 					value = value.replace(':','-')
+			if type == 'identifier.def.propname' and value == 'initialize'
+				value = 'constructor'
 			
-			if type == 'decorator'
-				value = '_' + value.slice(1)
+			if type == 'decorator' and !source.slice(end).match(/^\s(prop|def|get|set)/)
+				value = ivarPrefix + value.slice(1)
 			
 			if type == 'property'
 				if value[0] == '@'
-					value = value.replace(/^\@/,'_')
+					value = value.replace(/^\@/,ivarPrefix)
+					token.access = yes
 				elif value == 'len'
 					value = 'length'
 				elif (/^(\n|\s\:|\)|\,|\.)/).test(source.slice(end)) and !token.access
 					if value[0] == value[0].toLowerCase!
 						value = value + '!'
 
-			if type == 'identifier' and value[0] == value[0].toLowerCase! and value[0] != '_'
-				if !token.variable and (/^(\n|\s\:|\)|\,|\.)/).test(source.slice(end))
+			if type == 'identifier' and !token.access and value[0] == value[0].toLowerCase! and value[0] != '_'
+				if !token.variable and (/^(\n|\s\:|\)|\,|\.)/).test(source.slice(end)) and value != 'new'
 					value = value + '!'
 
 			token.value = value

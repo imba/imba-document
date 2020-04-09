@@ -59,6 +59,7 @@ export var grammar = {
 	identifier: /[a-z_][A-Za-z\d\-\_]*/
 	anyIdentifier: /[A-Za-z_\$][A-Za-z\d\-\_\$]*/
 	esmIdentifier: /\@?[A-Za-z_\$][A-Za-z\d\-\_\$]*/
+	propertyPath: /(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*\.)?(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*)/
 	tagNameIdentifier: /(?:[\w\-]+\:)?\w+(?:\-\w+)*/
 	variable: /[\w\$]+(?:-[\w\$]*)*/
 	varKeyword: /var|let|const/
@@ -217,9 +218,9 @@ export var grammar = {
 		]
 
 		def_statement: [
-			[/(def|set|get)(\s)(@identifier)(\s)(?=\{|\w|\[|\.\.\.)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'white.params', next: '@var_decl.param'}]],
-			[/(def|set|get)(\s)(@identifier)(\()/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'params.param.open', next: '@var_parens.param'}]],
-			[/(def|set|get)(\s)(@identifier)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'}]],
+			[/(def|set|get)(\s)(@propertyPath)(\s)(?=\{|\w|\[|\.\.\.|\*)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'white.params', next: '@var_decl.param'}]],
+			[/(def|set|get)(\s)(@propertyPath)(\()/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'params.param.open', next: '@var_parens.param'}]],
+			[/(def|set|get)(\s)(@propertyPath)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'}]],
 		]
 
 		class_statement: [
@@ -562,8 +563,11 @@ export var grammar = {
 			[/@regexpctl/,  'regexp.escape.control'],
 			[/[^\\\/]/,     'regexp' ],
 			[/@regexpesc/,  'regexp.escape' ],
+			[/\\:/,     'regexp.escape' ],
 			[/\\\./,        'regexp.invalid' ],
-			['/',           { token: 'regexp.slash.close', bracket: '@close'}, '@pop' ],
+			[/(\/)(\w*)/, [{ token: 'regexp.slash.close', bracket: '@close'},{token: 'regexp.flags', next: '@pop'}] ],
+			['/', { token: 'regexp.slash.close', bracket: '@close'},'@pop' ],
+			[/./,        'regexp.invalid' ],
 		],
 
 		regexrange: [
