@@ -59,6 +59,7 @@ export var grammar = {
 	identifier: /[a-z_][A-Za-z\d\-\_]*/
 	anyIdentifier: /[A-Za-z_\$][A-Za-z\d\-\_\$]*/
 	esmIdentifier: /\@?[A-Za-z_\$][A-Za-z\d\-\_\$]*/
+	tagNameIdentifier: /(?:[\w\-]+\:)?\w+(?:\-\w+)*/
 	variable: /[\w\$]+(?:-[\w\$]*)*/
 	varKeyword: /var|let|const/
 	newline: RegExp.new(newline)
@@ -106,6 +107,14 @@ export var grammar = {
 			{ include: 'decorator' }
 
 			[/\(/, 'delimiter.parens.open', '@parens']
+		]
+
+		expressable: [
+			{include: 'catch'}
+		]
+
+		catch: [
+			[/(catch)(\s)(@anyIdentifier)/, ['keyword.catch','white','variable.let']],
 		]
 
 		do: [
@@ -180,7 +189,9 @@ export var grammar = {
 			{ include: 'prop_statement' }
 			{ include: 'def_statement' }
 			{ include: 'class_statement' }
+			{ include: 'tag_statement' }
 			{ include: 'import_statement' }
+			{ include: 'expressable'}
 			{ include: 'expression'}
 		]
 
@@ -215,7 +226,8 @@ export var grammar = {
 			[/(class)(\s)(@identifier)/, [{token: 'keyword.$1'},'white.classname',{token: 'identifier.$1.name'}]],
 		]
 		tag_statement: [
-			[/(tag)(\s)(@identifier)(\s)(?=\{|\w|\[)/, [{token: 'keyword.$1'},'white.classname',{token: 'identifier.$1.name'}]],
+			[/(tag)(\s)(@tagNameIdentifier)(\s)(\<)(\s)(@tagNameIdentifier)/, ['keyword.tag','white.tagname','identifier.tagname','white','operator.extends','white','identifier.tagname']],
+			[/(tag)(\s)(@tagNameIdentifier)(\s)(?=\{|\w|\[)/, [{token: 'keyword.$1'},'white.classname',{token: 'identifier.$1.name'}]],
 		]
 
 		import_body: [

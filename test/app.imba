@@ -1,5 +1,10 @@
 import { ImbaDocument } from '../src/index'
 
+import sample from './docs/test.imba.raw'
+
+class EditableEvent < CustomEvent
+
+
 def highlight tokens
 	let parts = []
 	console.log(tokens)
@@ -11,88 +16,56 @@ def highlight tokens
 
 		if token.variable
 			types = ['variable']
+			if token.variable.varscope
+				types.push("scope_{token.variable.varscope.type}")
 
 		if typ != 'white' and typ != 'line'
 			value = "<span class='{types.join(' ')}'>{value}</span>"
 
+		if true
+			yes
+		elif types.indexOf('open') >= 0
+			value
+			value = "<span class='group'>{value}"
+
+		elif types.indexOf('close') >= 0
+			value = "{value}</span>"
+		
 		parts.push(value)
 	return parts.join('')
 
-let source = `
 
-let top = 1
-
-class Hello
-	prop three = 3
-	prop str = "hello"
-	attr main-ref
-
-	def constructor uri, languageId, version, content
-		uri = uri
-		languageId = languageId
-		version = version
-		content\\number = content
-		cache = []
-
-	get value
-		1
-
-	def render
-		"string \{10\}"
-		'string'
-		true
-	
-	def again one, two
-		let x = 1
-		let [b,c] = [2,3]
-		[one,two,three,x,b,c,top]
-		self.test
-
-	def more one, two
-		for \{name,desc},i of global.items
-			name + desc
-		name = 'hello'
-		let obj = \{
-			one: 1
-			two: 2
-			three: 3
-			'four': 4
-		}
-	
-	def special one
-		one = one
-		let three = three
-		let item = str.slice 1, two
-		let fn = do(x,y) [x,y,one,two]
-		x + y
-		for item in items do yes
-		return one > 2 ? 10 : "something"
-
-	def render
-		<self>
-			<div.one.two §counter=three title=top> "hello"
-`
-
-let locs = []
-while source.indexOf('§') >= 0
-	let idx = source.indexOf('§')
-	locs.push(idx)
-	source = source.slice(0,idx) + source.slice(idx + 2)
-
-console.log locs
-
-
-let doc = ImbaDocument.new('file:///source.imba','imba',1,source)
-
-console.log doc
-for loc in locs
-	let ctx = doc.getContextAtOffset(loc)
-	console.log ctx
+# let content = migrateLegacyDocument(sample.body)
+let content = ImbaDocument.tmp(sample.body).migrateToImba2!
+let doc = ImbaDocument.new('/source.imba','imba',1,content)
 
 tag app-root
+
+	def reselected e\Event
+		console.log 'selected?!',e
+		setTimeout(&,20) do
+			let sel = window.getSelection!
+			let range = sel.getRangeAt(0)
+			let off = range.cloneRange!
+			off.setStart(document.querySelector('pre code'),0)
+			let loc = off.toString!.length
+			let ctx = doc.getContextAtOffset(loc)
+			let {token,mode,scope} = ctx
+			console.log token,mode,scope
+
+	def sendCustom
+		let o = {detail: {one: 1}}
+		var event = EditableEvent.new('stuff',o)
+		let res = dispatchEvent(event)
+		console.log event,res
+
+	def handleCustom e
+		console.log 'handle',e
+			
 	def render
-		<self.hbox.grow>
-			<pre> <code innerHTML=highlight(doc.getTokens!)>
+		<self.hbox.grow :selectstart.reselected :stuff.handleCustom>
+			<button :click.sendCustom> "custom!"
+			<pre> <code innerHTML=highlight(doc.getTokens!) contentEditable='true' spellcheck=false>
 
 ### css
 
@@ -115,7 +88,12 @@ tag app-root
 	--tag-angle: #9d9755;
 	--type: #718096;
 	--property: #F7FAFC;
+	--root-variable: #c5badc;
 	tab-size: 4;
+}
+
+:focus {
+	outline: none;
 }
 
 body {
@@ -127,8 +105,9 @@ body {
 pre,code {
 	font-family: 'Fira Code Light','Source Code Pro',monospace;
 	font-size: 14px;
+	font-weight: bold;
 }
-
+.invalid { color: red; }
 .comment { color: var(--comment); }
 .tag { color: var(--tag); }
 .type { color: var(--type); }
@@ -144,5 +123,6 @@ pre,code {
 .propname { color: var(--entity); }
 .this,.self { color: var(--this); }
 .tag.open,.tag.close { color: var(--tag-angle); }
+.variable.scope_root { color: var(--root-variable); }
 
 ###
