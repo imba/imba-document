@@ -30,7 +30,7 @@ def highlight tokens
 				types.push("scope_{token.variable.varscope.type}")
 
 		if typ != 'white' and typ != 'line'
-			value = "<span class='{types.join(' ')}'>{escape(value)}</span>"
+			value = "<span class='{types.join(' ')}' data-offset={token.offset}>{escape(value)}</span>"
 
 		if true
 			yes

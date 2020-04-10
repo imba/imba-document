@@ -544,7 +544,8 @@ export class ImbaDocument
 
 						if lastVarRef and lastVarRef.variable == variable
 							let between = code.slice(lastVarRef.offset + lastVarRef.value.length - offset,tok.offset - offset)
-							if between.match(/^\s*\=\s*$/) and (!next or code.slice(to).match(/^\s*[\,\)]/))
+							# console.log 'same variable',lastVarRef,variable,tok,JSON.stringify(between),next
+							if between.match(/^\s*\=\s*$/) and (!next or code.slice(to).match(/^\s*[\,\)]/) or next.type == 'newline')
 								if lastVarRef == variable
 									tok.variable = null
 								else
