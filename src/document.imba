@@ -247,8 +247,8 @@ export class ImbaDocument
 
 			var startLine = Math.max(range.start.line, 0)
 			var endLine = Math.max(range.end.line, 0)
-			var lineOffsets = _lineOffsets
-
+			var lineOffsets = self.lineOffsets
+			# some bug with these line offsets here
 			# many items has no line offset changes at all?
 
 			var addedLineOffsets = computeLineOffsets(change.text, false, startOffset)
