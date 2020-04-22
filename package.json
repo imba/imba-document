@@ -15,7 +15,7 @@
   },
   "main": "./index.js",
   "devDependencies": {
-    "imba": "^2.0.0-alpha.41",
+    "imba": "^2.0.0-alpha.42",
     "imba-rollup": "^2.0.0-alpha.41"
   },
   "dependencies": {}
