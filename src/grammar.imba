@@ -4,6 +4,12 @@ const newline = String.fromCharCode(172)
 # var eolpop = [/@newline/, token: '@rematch', next: '@pop']
 var eolpop = [/^/, token: '@rematch', next: '@pop']
 
+export var types =
+	decl_class_name: 'entity.name.type.class'
+	decl_tag_name: 'entity.name.type.class'
+	decl_prop_name: 'entity.name.type.property'
+	decl_def_name: 'entity.name.function'
+
 export var grammar = {
 	defaultToken: 'invalid',
 	ignoreCase: false,
@@ -26,7 +32,7 @@ export var grammar = {
 	],
 	boolean: ['true','false','yes','no','undefined']
 	contextual_keywords: [
-		'from', 'global', 'attr'
+		'from', 'global', 'attr','prop'
 	],
 	operators: [
 		'=', '!', '~', '?', ':','!!',
@@ -69,7 +75,7 @@ export var grammar = {
 	# The main tokenizer for our languages
 	tokenizer: {
 		root: [
-			{ include: '@body' }
+			{ include: 'body' }
 		],
 
 		common: [
@@ -144,6 +150,7 @@ export var grammar = {
 				'$1@keywords': {token: 'keyword.$1'},
 				'@default': 'identifier'
 			}],
+			[/(@anyIdentifier)/, 'identifier']
 			{include: 'type_start'}
 		]
 
@@ -184,7 +191,7 @@ export var grammar = {
 			{ include: 'forin_statement' }
 			{ include: 'prop_statement' }
 			{ include: 'def_statement' }
-			{ include: 'class_statement' }
+			{ include: '@class_statement' }
 			{ include: 'tag_statement' }
 			{ include: 'import_statement' }
 			{ include: 'expressable'}
@@ -213,17 +220,19 @@ export var grammar = {
 		]
 
 		def_statement: [
-			[/(def|set|get)(\s)(@propertyPath)(\s)(?=\{|\w|\[|\.\.\.|\*)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'white.params', next: '@var_decl.param'}]],
+			[/(def|set|get)(\s)(@propertyPath)(\s)(?=\{|\w|\[|\.\.\.|\*)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'white.params', next: '@implicit_params_decl.param'}]],
 			[/(def|set|get)(\s)(@propertyPath)(\()/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'params.param.open', next: '@var_parens.param'}]],
 			[/(def|set|get)(\s)(@propertyPath)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'}]],
 		]
 
 		class_statement: [
-			[/(class)(\s)(@identifier)/, [{token: 'keyword.$1'},'white.classname',{token: 'identifier.$1.name'}]],
+			[/(class)(\s)(@anyIdentifier)(\s)(\<)(\s)(@tagNameIdentifier)/, ['keyword.class','white.classname',types.decl_class_name,'white','operator.extends','white','entity.other.inherited-class']],
+			[/(class)(\s)(@anyIdentifier)/, [{token: 'keyword.$1'},'white.classname',types.decl_class_name]],
 		]
+		
 		tag_statement: [
-			[/(tag)(\s)(@tagNameIdentifier)(\s)(\<)(\s)(@tagNameIdentifier)/, ['keyword.tag','white.tagname','identifier.tagname','white','operator.extends','white','identifier.tagname']],
-			[/(tag)(\s)(@tagNameIdentifier)(\s)(?=\{|\w|\[)/, [{token: 'keyword.$1'},'white.classname',{token: 'identifier.$1.name'}]],
+			[/(tag)(\s)(@tagNameIdentifier)(\s)(\<)(\s)(@tagNameIdentifier)/, ['keyword.tag','white.tagname',types.decl_tag_name,'white','operator.extends','white','entity.other.inherited-tag']],
+			[/(tag)(\s)(@tagNameIdentifier)/, [{token: 'keyword.$1'},'white.classname',types.decl_tag_name]],
 		]
 
 		import_body: [
@@ -324,7 +333,8 @@ export var grammar = {
 			{ include: 'comments' }
 		]
 
-		var_params: [
+		implicit_params_decl: [
+			[/do(?=\s|@newline|$)/, token: 'keyword.blk', next: '@pop']
 			{ include: 'var_decl' }
 		]
 
@@ -341,7 +351,6 @@ export var grammar = {
 		body: [
 			{include: 'statements'}
 			[/@newline/,'newline']
-			[/(class|tag)(?=\s)/, { token: 'keyword.$1', next: '@declstart.$1'}],
 			[/(def|get|set)(?=\s)/, { token: 'keyword.$1', next: '@defstart.$1'}],
 			[/(prop|attr)(?=\s)/, { token: 'keyword.$1', next: '@propstart.$1'}],
 
@@ -351,7 +360,7 @@ export var grammar = {
 					'this': 'this',
 					'self': 'self',
 					'$1@boolean': { token: 'boolean.$0' },
-					'$1@keywords': { token: 'keyword.$0' },
+					'$1@keywords': { token: 'keywordz.$0' },
 					'$1@contextual_keywords': { token: 'identifier.$0' },
 					'@default': ['identifier','delimiter']
 				}
@@ -453,6 +462,11 @@ export var grammar = {
 				'$S2==event': {token: 'tag.modifier.start', switchTo: 'tag.modifier'}
 				'$S2==modifier': {token: 'tag.modifier.start', switchTo: 'tag.modifier'}
 				'@default': {token: 'tag.flag.start', switchTo: 'tag.flag'}
+			}}]
+
+			[/(\$?@anyIdentifier)/,{ cases: {
+				'$S2==name': {token: 'tag.reference'}
+				'@default': {token: 'tag.$S2'}
 			}}]
 			
 			[/(\s*\=\s*)/,token: 'tag.operator.equals', next: 'tag_value']
