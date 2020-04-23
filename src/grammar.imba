@@ -143,6 +143,7 @@ export var grammar = {
 			[/\$\w+\$/, 'identifier.env']
 			[/\$\d+/, 'identifier.special']
 			[/(@constant)/, 'identifier.constant']
+			[/\$(@anyIdentifier)/, 'identifier.internal']
 			[/(@identifier)/,cases: {
 				'this': 'this',
 				'self': 'self',
@@ -360,7 +361,7 @@ export var grammar = {
 					'this': 'this',
 					'self': 'self',
 					'$1@boolean': { token: 'boolean.$0' },
-					'$1@keywords': { token: 'keywordz.$0' },
+					'$1@keywords': { token: 'keyword.$0' },
 					'$1@contextual_keywords': { token: 'identifier.$0' },
 					'@default': ['identifier','delimiter']
 				}
