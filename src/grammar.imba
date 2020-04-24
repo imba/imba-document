@@ -221,9 +221,9 @@ export var grammar = {
 		]
 
 		def_statement: [
-			[/(def|set|get)(\s)(@propertyPath)(\s)(?=\{|\w|\[|\.\.\.|\*)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'white.params', next: '@implicit_params_decl.param'}]],
-			[/(def|set|get)(\s)(@propertyPath)(\()/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'params.param.open', next: '@var_parens.param'}]],
-			[/(def|set|get)(\s)(@propertyPath)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'}]],
+			[/(def|set|get)(\s)(@propertyPath\??)(\s)(?=\{|\w|\[|\.\.\.|\*)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'white.params', next: '@implicit_params_decl.param'}]],
+			[/(def|set|get)(\s)(@propertyPath\??)(\()/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'params.param.open', next: '@var_parens.param'}]],
+			[/(def|set|get)(\s)(@propertyPath\??)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'}]],
 		]
 
 		class_statement: [
