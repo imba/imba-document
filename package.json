@@ -1,6 +1,6 @@
 {
   "name": "imba-document",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "license": "MIT",
   "author": "Sindre Aarsaether",
   "repository": {
@@ -15,7 +15,7 @@
   },
   "main": "./index.js",
   "devDependencies": {
-    "imba": "^2.0.0-alpha.42",
+    "imba": "^2.0.0-alpha.44",
     "imba-rollup": "^2.0.0-alpha.41"
   },
   "dependencies": {}
