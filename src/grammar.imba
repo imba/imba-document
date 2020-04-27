@@ -95,6 +95,31 @@ export var grammar = {
 			{ include: 'legacy_access'}
 			{ include: 'spread' }
 			{ include: 'do' }
+			{ include: 'implicit_call' }
+			{ include: 'access' }
+			{ include: 'identifiers' }
+			{ include: 'tag_start' },
+			{ include: 'string_start' }
+			{ include: 'regexp_start' }
+			{ include: 'object_start' }
+			{ include: 'array_start' }
+			{ include: 'parens_start' }
+			{ include: 'number' }
+			{ include: 'comments' }
+			{ include: 'common' }
+			{ include: 'operators' }
+			{ include: 'decorator' }
+			{ include: 'parens_start' }
+		]
+
+		parens_start: [
+			[/\(/, 'delimiter.parens.open', '@parens']
+		]
+
+		tag_value_expression: [
+			{ include: 'legacy_access'}
+			{ include: 'spread' }
+			{ include: 'do' }
 			{ include: 'access' }
 			{ include: 'identifiers' }
 			{ include: 'tag_start' },
@@ -106,9 +131,7 @@ export var grammar = {
 			{ include: 'comments' }
 			{ include: 'common' }
 			{ include: 'operators' }
-			{ include: 'decorator' }
-
-			[/\(/, 'delimiter.parens.open', '@parens']
+			{ include: 'parens_start' }
 		]
 
 		expressable: [
@@ -123,8 +146,12 @@ export var grammar = {
 			[/(do)(\()/, [{token: 'keyword.$1'},{token: 'argparam.open', next: '@var_parens.argparam'}]],
 		]
 
-		access: [
+		implicit_call: [
 			[/(\.)(\@?@anyIdentifier)(\s+)(?=\S)/, ['operator.dot','property',{token: 'white', next: '@implicit_params'}]],
+		]
+
+		access: [
+			
 			[/(\.)(\@?@anyIdentifier)/, ['operator.dot','property']],
 		]
 
@@ -184,7 +211,7 @@ export var grammar = {
 			[/\)/, 'delimiter.parens.close', '@pop']
 			{include: 'var_expr'}
 			{include: 'expression'}
-			[/\,/, 'delimiterz']
+			[/\,/, 'delimiter']
 		]
 
 		statements: [
@@ -457,10 +484,11 @@ export var grammar = {
 
 		tag: [
 			[/>/,'tag.close','@pop']
-			[/(\-?@tagIdentifier)/,{token: 'tag.$S2'}]
+			[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,{token: 'tag.$S2'}]
 			[/(\-?\d+)/,{token: 'tag.$S2'}]
 			[/\./,{ cases: {
-				'$S2==event': {token: 'tag.modifier.start', switchTo: 'tag.modifier'}
+				'$S2==event': {token: 'tag.event-modifier.start', switchTo: 'tag.event-modifier'}
+				'$S2==event-modifier': {token: 'tag.event-modifier.start', switchTo: 'tag.event-modifier'}
 				'$S2==modifier': {token: 'tag.modifier.start', switchTo: 'tag.modifier'}
 				'@default': {token: 'tag.flag.start', switchTo: 'tag.flag'}
 			}}]
@@ -470,11 +498,14 @@ export var grammar = {
 				'@default': {token: 'tag.$S2'}
 			}}]
 			
-			[/(\s*\=\s*)/,token: 'tag.operator.equals', next: 'tag_value']
+			[/(\s*\=\s*)/,token: 'tag.operator.equals', next: 'tag_value.$S2']
 			[/\:/,token: 'tag.event.start', switchTo: 'tag.event']
+			[/\@/,token: 'tag.event.start', switchTo: 'tag.event']
 			[/\{/,token: 'tag.$S2.braces.open', next: '@tag_interpolation.$S2']
 			[/\[/,token: 'tag.data.open', next: '@tag_data']
+			[/\(/,token: 'tag.parens.open.$S2', next: '@tag_parens.$S2']
 			[/\s+/,token: 'white', switchTo: 'tag.attr']
+			{include: 'comments'}
 			[/\@(@tagIdentifier)/,token: 'tag.reference']
 		]
 		
@@ -482,6 +513,12 @@ export var grammar = {
 			[/\}/,token: 'tag.$S2.braces.close', next: '@pop']
 			{include: 'expression'}
 			[/\)|\]/,token: 'invalid']
+		]
+
+		tag_parens: [
+			[/\)/,token: 'tag.parens.close.$S2', next: '@pop']
+			{include: 'expression'}
+			[/\]|\}/,token: 'invalid']
 		]
 
 		tag_data: [
@@ -494,14 +531,8 @@ export var grammar = {
 			[/\#(-*[a-zA-Z][\w\-]*)+/, 'tag.singleton.ref']
 		],
 		tag_value: [
-			[/(?=(\:?[\w]+\=))/, { token: '', next: '@pop' }],
 			[/(?=(\>|\s))/, { token: '', next: '@pop' }],
-			{include: 'expression'}
-		],
-		tag_parens: [
-			[/\)/, { token: 'paren.close.tag', next: '@pop' }],
-			[/(\))(\:?)/, ['paren.close.tag','delimiter.colon'], '@pop' ],
-			{ include: 'body' }
+			{include: 'tag_value_expression'}
 		],
 
 		braces: [
