@@ -104,6 +104,7 @@ export var grammar = {
 			{ include: 'object_start' }
 			{ include: 'array_start' }
 			{ include: 'parens_start' }
+			{ include: 'number_with_unit' }
 			{ include: 'number' }
 			{ include: 'comments' }
 			{ include: 'common' }
@@ -444,6 +445,12 @@ export var grammar = {
 			[/0[0-7]+(?!\d)/, 'number.octal'],
 			[/\d+/, 'number'],
 		],
+
+		number_with_unit: [
+			[/(\d+)([a-z]+|\%)/, ['number','unit']],
+			[/(\d*\.\d+(?:[eE][\-+]?\d+)?)([a-z]+|\%)/, ['number.float','unit']]
+		]
+		
 		operators: [
 			{include: 'spread'}
 			[/,/,'delimiter']
@@ -486,10 +493,15 @@ export var grammar = {
 			[/>/,'tag.close','@pop']
 			[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,{token: 'tag.$S2'}]
 			[/(\-?\d+)/,{token: 'tag.$S2'}]
+
+			[/\.\(/,token: 'tag.style.open.$S2', next: '@tag_style.$S2']
+
 			[/\./,{ cases: {
 				'$S2==event': {token: 'tag.event-modifier.start', switchTo: 'tag.event-modifier'}
 				'$S2==event-modifier': {token: 'tag.event-modifier.start', switchTo: 'tag.event-modifier'}
 				'$S2==modifier': {token: 'tag.modifier.start', switchTo: 'tag.modifier'}
+				'$S2==rule': {token: 'tag.rule-modifier.start', switchTo: 'tag.rule-modifier'}
+				'$S2==rule-modifier': {token: 'tag.rule-modifier.start', switchTo: 'tag.rule-modifier'}
 				'@default': {token: 'tag.flag.start', switchTo: 'tag.flag'}
 			}}]
 
@@ -499,7 +511,7 @@ export var grammar = {
 			}}]
 			
 			[/(\s*\=\s*)/,token: 'tag.operator.equals', next: 'tag_value.$S2']
-			[/\:/,token: 'tag.event.start', switchTo: 'tag.event']
+			[/\:/,token: 'tag.rule.start', switchTo: 'tag.rule']
 			[/\@/,token: 'tag.event.start', switchTo: 'tag.event']
 			[/\{/,token: 'tag.$S2.braces.open', next: '@tag_interpolation.$S2']
 			[/\[/,token: 'tag.data.open', next: '@tag_data']
@@ -507,6 +519,12 @@ export var grammar = {
 			[/\s+/,token: 'white', switchTo: 'tag.attr']
 			{include: 'comments'}
 			[/\@(@tagIdentifier)/,token: 'tag.reference']
+		]
+
+		tag_style: [
+			[/\)/,token: 'tag.style.close.$S2', next: '@pop']
+			{include: 'style_properties'}
+			[/\]|\}/,token: 'invalid']
 		]
 		
 		tag_interpolation: [
@@ -534,6 +552,22 @@ export var grammar = {
 			[/(?=(\>|\s))/, { token: '', next: '@pop' }],
 			{include: 'tag_value_expression'}
 		],
+
+		style_properties: [
+			[/(@anyIdentifier)\:/, 'style.scope']
+			[/(@anyIdentifier)/, 'style.mixin']
+			[/\(/, 'style.args.open', '@style_args']
+			['/', 'style.arg.delimiter']
+			{ include: 'number_with_unit' }
+			{ include: 'operators' }
+			{ include: 'number' }
+		]
+
+		style_args: [
+			[/\)/, 'style.args.close', '@pop']
+			{include: 'expression'}
+			[/\,/, 'delimiter']
+		]
 
 		braces: [
 			['}', { token: 'brace.close', next: '@pop' }],
