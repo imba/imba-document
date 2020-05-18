@@ -97,6 +97,7 @@ export var grammar = {
 			{ include: 'do' }
 			{ include: 'implicit_call' }
 			{ include: 'access' }
+			{ include: 'style_declaration' }
 			{ include: 'identifiers' }
 			{ include: 'tag_start' },
 			{ include: 'string_start' }
@@ -112,6 +113,8 @@ export var grammar = {
 			{ include: 'decorator' }
 			{ include: 'parens_start' }
 		]
+
+		
 
 		parens_start: [
 			[/\(/, 'delimiter.parens.open', '@parens']
@@ -220,6 +223,7 @@ export var grammar = {
 			{ include: 'forin_statement' }
 			{ include: 'prop_statement' }
 			{ include: 'def_statement' }
+			{ include: 'css_statement' }
 			{ include: '@class_statement' }
 			{ include: 'tag_statement' }
 			{ include: 'import_statement' }
@@ -252,6 +256,44 @@ export var grammar = {
 			[/(def|set|get)(\s)(@propertyPath\??)(\s)(?=\{|\w|\[|\.\.\.|\*)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'white.params', next: '@implicit_params_decl.param'}]],
 			[/(def|set|get)(\s)(@propertyPath\??)(\()/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'params.param.open', next: '@var_parens.param'}]],
 			[/(def|set|get)(\s)(@propertyPath\??)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'}]],
+		]
+
+		css_statement: [
+			[/^(\t*)(css)(\s)/, ['white',{token: 'keyword.$2'},{token: 'white', next: '@indented_style_selector.$1\t'}]],
+		]
+
+		indented_style_body: [
+			[/^(\t*)(?=[^\{\t]*&)/,{cases: {
+				'$1==$S2': {token: 'white',next:'indented_style_selector.$1\t',log: 'indenting style selector?'}
+				'@default': { token: '@rematch', next: '@pop' }
+			}}]
+			[/^(\t*)(?=[^\t\n@newline])/, {
+				cases: {
+					'$1==$S2': 'still-here',
+					'@default': { token: '@rematch', next: '@pop' }
+				}
+			}]
+
+			# [/^(\t*)(?=[^\{]*&)/,[{token: 'white',next:'indented_style_selector.$1\t'}]]
+			{include: 'style_properties'}
+		]
+
+		indented_style_selector: [
+			[/\=/,{token: 'style.start-operator',switchTo: 'indented_style_body.$S2'}]
+			[/\{/,{token: 'style.open',switchTo: 'style_properties.}'}]
+			[/^/,{token: '@rematch', switchTo: '@indented_style_body.$S2'}]
+			[/\:([\w\-]+)/,'style.selector.pseudostate']
+			[/\.([\w\-]+)/,'style.selector.class-name']
+			[/([\w\-]+)/,'style.selector.element']
+			[/(>|~|\+)/,'style.selector.operator']
+			[/\&/,'style.selector.context']
+			[/[^\{\=]+/,'style.selector.name']
+			# push into [ and (
+		]
+
+		style_selectors: [
+			[/([^\{]+)/,'style.selector']
+			[/\{/,'style.open','@style_properties.}']
 		]
 
 		class_statement: [
@@ -494,7 +536,9 @@ export var grammar = {
 			[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,{token: 'tag.$S2'}]
 			[/(\-?\d+)/,{token: 'tag.$S2'}]
 
-			[/\.\(/,token: 'tag.style.open.$S2', next: '@tag_style.$S2']
+			[/\.\(/,token: 'style.open.$S2', next: '@style_properties.)']
+
+			[/(\$|\s)\(/,token: 'style.open.$S2', next: '@style_properties.)']
 
 			[/\./,{ cases: {
 				'$S2==event': {token: 'tag.event-modifier.start', switchTo: 'tag.event-modifier'}
@@ -509,22 +553,27 @@ export var grammar = {
 				'$S2==name': {token: 'tag.reference'}
 				'@default': {token: 'tag.$S2'}
 			}}]
+
+			[/\$?{/,{ cases: {
+				'$S2==attr': {token: 'style.open', next: '@style_properties.}'}
+				'@default': {token: 'tag.$S2.braces.open', next: '@tag_interpolation.$S2'}
+			}}]
+
+			[/\[/,{ cases: {
+				'$S2==name': {token: 'tag.data.open', next: '@tag_data'}
+				# '$S2==attr': {token: 'style.open', next: '@style_properties.]'}
+				'@default': {token: 'tag.data.open', next: '@tag_data'}
+			}}]
 			
 			[/(\s*\=\s*)/,token: 'tag.operator.equals', next: 'tag_value.$S2']
 			[/\:/,token: 'tag.rule.start', switchTo: 'tag.rule']
 			[/\@/,token: 'tag.event.start', switchTo: 'tag.event']
 			[/\{/,token: 'tag.$S2.braces.open', next: '@tag_interpolation.$S2']
-			[/\[/,token: 'tag.data.open', next: '@tag_data']
 			[/\(/,token: 'tag.parens.open.$S2', next: '@tag_parens.$S2']
+			
 			[/\s+/,token: 'white', switchTo: 'tag.attr']
 			{include: 'comments'}
 			[/\@(@tagIdentifier)/,token: 'tag.reference']
-		]
-
-		tag_style: [
-			[/\)/,token: 'tag.style.close.$S2', next: '@pop']
-			{include: 'style_properties'}
-			[/\]|\}/,token: 'invalid']
 		]
 		
 		tag_interpolation: [
@@ -553,14 +602,64 @@ export var grammar = {
 			{include: 'tag_value_expression'}
 		],
 
+		style_declaration: [
+			# [/\.\(/,token: 'style.open.$S2', next: '@style_properties.)']
+			[/\$\{/,token: 'style.open.$S2', next: '@style_properties.}']
+		]
+
 		style_properties: [
-			[/(@anyIdentifier)\:/, 'style.scope']
-			[/(@anyIdentifier)/, 'style.mixin']
-			[/\(/, 'style.args.open', '@style_args']
-			['/', 'style.arg.delimiter']
+			[/(\}|\)|\])/, { cases: {
+					'$1==$S2': {token: 'style.close', next: '@pop'},
+					# '$1==$S2': {token: 'style.close', next: '@pop'},
+					'@default': 'invalid'
+			}}],
+			# [/\)/,'style.args.close','@pop']
+			# [/\}/,'style.properties.close','@pop']
+			{ include: 'comments'}
+			# { include: 'style_selector'}
+			{ include: 'style_property'}
+			[/([\:]\s*)/, 'style.property.operator','@style_value']
+			# [/(@anyIdentifier)/, 'style.mixin']
+			# [/\(/, 'style.args.open', '@style_properties.)']
+			# [/\{/, 'style.properties.open', '@style_properties.}']
+			[/\s+/, 'style.whitespace']
+			[/[\;]/, 'style.delimiter']
+			# { include: 'number_with_unit' }
+			# { include: 'operators' }
+			# { include: 'number' }
+		]
+
+		style_selector: [
+			[/([^,;\}]+)(\{)/, ['style.selector',token: 'style.properties.open', next: '@style_properties.}']]
+		]
+
+		style_property: [
+			[/(@anyIdentifier)\|/, 'style.property.scope']
+			[/(@anyIdentifier)/, 'style.property.name']
+			[/\@(@anyIdentifier)/, 'style.property.mixin']
+			[/\.(@anyIdentifier)/, 'style.property.scope']
+		]
+
+		style_value: [
+			eolpop,
+			[/\s([\$\w\-]+(\.[\w\-]+)*[\:\=])/, token: '@rematch', next: '@pop'],
+			[/[;\)\}\]]/, token: '@rematch', next: '@pop'],
+			[/(xs|sm|md|lg|xl|\dxl)\b/, 'style.value.size'],
 			{ include: 'number_with_unit' }
 			{ include: 'operators' }
 			{ include: 'number' }
+			{ include: 'string_start' }
+			{ include: 'comments' }
+			[/(@anyIdentifier)/, 'style.value']
+		]
+
+		
+
+		style_arg: [
+			{ include: 'number_with_unit' }
+			{ include: 'operators' }
+			{ include: 'number' }
+			[/(@anyIdentifier)/, 'style.value']
 		]
 
 		style_args: [
