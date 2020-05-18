@@ -114,8 +114,6 @@ export var grammar = {
 			{ include: 'parens_start' }
 		]
 
-		
-
 		parens_start: [
 			[/\(/, 'delimiter.parens.open', '@parens']
 		]
@@ -155,7 +153,6 @@ export var grammar = {
 		]
 
 		access: [
-			
 			[/(\.)(\@?@anyIdentifier)/, ['operator.dot','property']],
 		]
 
@@ -264,7 +261,7 @@ export var grammar = {
 
 		indented_style_body: [
 			[/^(\t*)(?=[^\{\t]*&)/,{cases: {
-				'$1==$S2': {token: 'white',next:'indented_style_selector.$1\t',log: 'indenting style selector?'}
+				'$1==$S2': {token: 'white',next:'indented_style_selector.$1\t'}
 				'@default': { token: '@rematch', next: '@pop' }
 			}}]
 			[/^(\t*)(?=[^\t\n@newline])/, {
@@ -273,8 +270,6 @@ export var grammar = {
 					'@default': { token: '@rematch', next: '@pop' }
 				}
 			}]
-
-			# [/^(\t*)(?=[^\{]*&)/,[{token: 'white',next:'indented_style_selector.$1\t'}]]
 			{include: 'style_properties'}
 		]
 
@@ -289,11 +284,6 @@ export var grammar = {
 			[/\&/,'style.selector.context']
 			[/[^\{\=]+/,'style.selector.name']
 			# push into [ and (
-		]
-
-		style_selectors: [
-			[/([^\{]+)/,'style.selector']
-			[/\{/,'style.open','@style_properties.}']
 		]
 
 		class_statement: [
@@ -603,39 +593,25 @@ export var grammar = {
 		],
 
 		style_declaration: [
-			# [/\.\(/,token: 'style.open.$S2', next: '@style_properties.)']
-			[/\$\{/,token: 'style.open.$S2', next: '@style_properties.}']
+			[/\.\{/,token: 'style.open.$S2', next: '@style_properties.}']
 		]
 
 		style_properties: [
 			[/(\}|\)|\])/, { cases: {
 					'$1==$S2': {token: 'style.close', next: '@pop'},
-					# '$1==$S2': {token: 'style.close', next: '@pop'},
 					'@default': 'invalid'
 			}}],
-			# [/\)/,'style.args.close','@pop']
-			# [/\}/,'style.properties.close','@pop']
 			{ include: 'comments'}
-			# { include: 'style_selector'}
 			{ include: 'style_property'}
 			[/([\:]\s*)/, 'style.property.operator','@style_value']
-			# [/(@anyIdentifier)/, 'style.mixin']
-			# [/\(/, 'style.args.open', '@style_properties.)']
-			# [/\{/, 'style.properties.open', '@style_properties.}']
 			[/\s+/, 'style.whitespace']
 			[/[\;]/, 'style.delimiter']
-			# { include: 'number_with_unit' }
-			# { include: 'operators' }
-			# { include: 'number' }
-		]
-
-		style_selector: [
-			[/([^,;\}]+)(\{)/, ['style.selector',token: 'style.properties.open', next: '@style_properties.}']]
 		]
 
 		style_property: [
 			[/(@anyIdentifier)\|/, 'style.property.scope']
-			[/(@anyIdentifier)/, 'style.property.name']
+			[/(--@anyIdentifier)/, 'style.property.var']
+			[/(-*@anyIdentifier)/, 'style.property.name']
 			[/\@(@anyIdentifier)/, 'style.property.mixin']
 			[/\.(@anyIdentifier)/, 'style.property.scope']
 		]
@@ -645,27 +621,20 @@ export var grammar = {
 			[/\s([\$\w\-]+(\.[\w\-]+)*[\:\=])/, token: '@rematch', next: '@pop'],
 			[/[;\)\}\]]/, token: '@rematch', next: '@pop'],
 			[/(xs|sm|md|lg|xl|\dxl)\b/, 'style.value.size'],
+			[/(--@anyIdentifier)/, 'style.value.var']
 			{ include: 'number_with_unit' }
 			{ include: 'operators' }
 			{ include: 'number' }
 			{ include: 'string_start' }
 			{ include: 'comments' }
+			[/\(/, token: 'delimiter.style.parens.open', next: '@style_expressions.)']
 			[/(@anyIdentifier)/, 'style.value']
 		]
 
-		
-
-		style_arg: [
-			{ include: 'number_with_unit' }
-			{ include: 'operators' }
-			{ include: 'number' }
-			[/(@anyIdentifier)/, 'style.value']
-		]
-
-		style_args: [
-			[/\)/, 'style.args.close', '@pop']
-			{include: 'expression'}
-			[/\,/, 'delimiter']
+		style_expressions: [
+			[/\)/, token: 'delimiter.style.parens.close', next: '@pop']
+			[/\(/, token: 'delimiter.style.parens.open', next: '@style_expressions.)']
+			{include: '@style_value'}
 		]
 
 		braces: [
