@@ -153,6 +153,8 @@ export var grammar = {
 		]
 
 		access: [
+			[/(\.)(\@?@anyIdentifier\?)/, ['operator.dot','property.predicate']],
+			[/(\.)(\@?@anyIdentifier\!)/, ['operator.dot','property.invoke']],
 			[/(\.)(\@?@anyIdentifier)/, ['operator.dot','property']],
 		]
 
@@ -172,6 +174,8 @@ export var grammar = {
 			[/\$\d+/, 'identifier.special']
 			[/(@constant)/, 'identifier.constant']
 			[/\$(@anyIdentifier)\??/, 'identifier.internal']
+			[/(@anyIdentifier\?)/, 'identifier.predicate']
+			[/(@anyIdentifier\!)/, 'identifier.invoke']
 			[/(@identifier\??)/,cases: {
 				'this': 'this',
 				'self': 'self',
@@ -179,7 +183,7 @@ export var grammar = {
 				'$1@keywords': {token: 'keyword.$1'},
 				'@default': 'identifier'
 			}],
-			[/(@anyIdentifier\??)/, 'identifier']
+			[/(@anyIdentifier)/, 'identifier']
 			{include: 'type_start'}
 		]
 

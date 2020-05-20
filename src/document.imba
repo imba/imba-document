@@ -77,6 +77,9 @@ class Variables
 		map[token.value] = token
 	
 	def lookup name, deep = yes
+		if name[name.length - 1] == '!'
+			name = name.slice(0,-1)
+
 		let res = map[name]
 		if deep and !res and scope.parent
 			return scope.parent.variables.lookup(name)
@@ -538,7 +541,7 @@ export class ImbaDocument
 					scope.variables.add(tok)
 					lastVarRef = tok
 
-				elif tok.type == 'identifier'
+				elif tok.type.match(/^identifier/)
 					if let variable = scope.variables.lookup(tok.value)
 						tok.variable = variable
 
