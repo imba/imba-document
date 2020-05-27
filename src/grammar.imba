@@ -673,9 +673,9 @@ export var grammar = {
 			[/[^"'\`\{\\]+/, 'string'],
 			[/@escapes/, 'string.escape'],
 			[/\./, 'string.escape.invalid'],
-			[/\./, 'string.escape.invalid'],
 			[/\{/, { cases: {
 				'$S2=="': { token: 'string.bracket.open', next: 'root.interpolatedstring' },
+				'$S2==\`': { token: 'string.bracket.open', next: 'root.interpolatedstring' },
 				'@default': 'string'
 			}}],
 			[/["'`]/, { cases: { '$#==$S2': { token: 'string.close', next: '@pop' }, '@default': 'string' } }],
@@ -713,8 +713,8 @@ export var grammar = {
 			[/@regexpesc/,  'regexp.escape' ],
 			[/\\:/,     'regexp.escape' ],
 			[/\\\./,        'regexp.invalid' ],
-			[/(\/)(\w*)/, [{ token: 'regexp.slash.close', bracket: '@close'},{token: 'regexp.flags', next: '@pop'}] ],
-			['/', { token: 'regexp.slash.close', bracket: '@close'},'@pop' ],
+			[/(\/)(\w+)/, [{ token: 'regexp.slash.close'},{token: 'regexp.flags', next: '@pop'}] ],
+			['/', { token: 'regexp.slash.close', next: '@pop'}],
 			[/./,        'regexp.invalid' ],
 		],
 
