@@ -525,6 +525,7 @@ export class ImbaDocument
 				# continue if tok.type == 'lookahead.imba'
 				let next = lexed.tokens[i + 1]
 				let to = next ? (next.offset - offset) : 1000000
+				let typ = tok.type
 
 				let match
 
@@ -541,7 +542,7 @@ export class ImbaDocument
 					scope.variables.add(tok)
 					lastVarRef = tok
 
-				elif tok.type.match(/^identifier/)
+				elif typ.match(/^identifier/) and typ != 'identifier.key'
 					if let variable = scope.variables.lookup(tok.value)
 						tok.variable = variable
 

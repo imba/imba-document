@@ -98,6 +98,7 @@ export var grammar = {
 			{ include: 'implicit_call' }
 			{ include: 'access' }
 			{ include: 'style_declaration' }
+			{ include: 'object_key' }
 			{ include: 'identifiers' }
 			{ include: 'tag_start' },
 			{ include: 'string_start' }
@@ -169,6 +170,10 @@ export var grammar = {
 			[/\,/, 'delimiter']
 		]
 
+		object_key: [
+			[/(@anyIdentifier)\??(?=\:)/, 'identifier.key']
+		]
+
 		identifiers: [
 			[/\$\w+\$/, 'identifier.env']
 			[/\$\d+/, 'identifier.special']
@@ -226,6 +231,7 @@ export var grammar = {
 			{ include: 'def_statement' }
 			{ include: 'css_statement' }
 			{ include: '@class_statement' }
+			{ include: 'struct_statement' }
 			{ include: 'tag_statement' }
 			{ include: 'import_statement' }
 			{ include: 'expressable'}
@@ -293,6 +299,11 @@ export var grammar = {
 		class_statement: [
 			[/(class)(\s)(@anyIdentifier)(\s)(\<)(\s)(@tagNameIdentifier)/, ['keyword.class','white.classname',types.decl_class_name,'white','operator.extends','white','entity.other.inherited-class']],
 			[/(class)(\s)(@anyIdentifier)/, [{token: 'keyword.$1'},'white.classname',types.decl_class_name]],
+		]
+
+		struct_statement: [
+			# [/(struct)(\s)(@anyIdentifier)(\s)(\<)(\s)(@tagNameIdentifier)/, ['keyword.struct','white.classname',types.decl_class_name,'white','operator.extends','white','entity.other.inherited-class']],
+			[/(struct)(\s)(@anyIdentifier)/, [{token: 'keyword.$1'},'white.classname',types.decl_class_name]],
 		]
 		
 		tag_statement: [
