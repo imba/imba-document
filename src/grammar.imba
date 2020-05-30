@@ -54,7 +54,7 @@ export var grammar = {
 	escapes: /\\(?:[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 	postaccess: /(:(?=\w))?/
 	ivar: /\@[a-zA-Z_]\w*/
-	constant: /[A-Z][A-Za-z\d\-\_]*/
+	constant: /[A-Z][\w\$]*(?:\-[\w\$]+)*/
 	className: /[A-Z][A-Za-z\d\-\_]*|[A-Za-z\d\-\_]+/
 	methodName: /[A-Za-z\_][A-Za-z\d\-\_]*\=?/
 	identifier: /[a-z_][A-Za-z\d\-\_]*/
@@ -106,7 +106,6 @@ export var grammar = {
 			{ include: 'object_start' }
 			{ include: 'array_start' }
 			{ include: 'parens_start' }
-			{ include: 'number_with_unit' }
 			{ include: 'number' }
 			{ include: 'comments' }
 			{ include: 'common' }
@@ -256,7 +255,7 @@ export var grammar = {
 		]
 
 		forin_statement: [
-			[/for( own)? /, 'keyword.for', '@forin_var_decl.let']
+			[/for( own)? /, 'keyword.for', '@forin_var_decl.const']
 		]
 
 		def_statement: [
@@ -348,11 +347,11 @@ export var grammar = {
 		]
 
 		array_start: [
-			[/\[/, 'array.open', '@array']
+			[/\[/, 'delimiter.array.open', '@array']
 		]
 
 		array: [
-			[/\]/, 'array.close', '@pop']
+			[/\]/, 'delimiter.array.close', '@pop']
 			[/\,/, 'delimiter']
 			{include: 'expression'}
 		]
@@ -366,16 +365,18 @@ export var grammar = {
 		var_object: [
 			[/\{/, 'object.open', '@var_object']
 			[/\}/, 'object.close', '@pop']
+			[/(@constant)/, token: 'variable.$S2.constant']
 			[/(@identifier)/, token: 'variable.$S2']
 			{ include: 'common' }
 			[/\,/,'delimiter']
 		]
 
 		var_array: [
-			[/\{/, 'object.open', '@var_object']
-			[/\}/, 'object.close', '@pop']
-			[/\[/, 'array.open', '@var_array']
-			[/\]/, 'array.close', '@pop']
+			[/\{/, 'delimiter.object.open', '@var_object']
+			[/\}/, 'delimiter.object.close', '@pop']
+			[/\[/, 'delimiter.array.open', '@var_array']
+			[/\]/, 'delimiter.array.close', '@pop']
+			[/(@constant)/, token: 'variable.$S2.constant']
 			[/(@identifier)/, token: 'variable.$S2']
 			{ include: 'common' }
 			[/\,/,'delimiter']
@@ -395,12 +396,15 @@ export var grammar = {
 
 		var_decl: [
 			eolpop
+			[/(@constant)/, token: 'variable.$S2.constant']
 			[/(@variable)/,token: 'variable.$S2']
+			[/\s*(=)\s*(?=(for|while|until)\s)/,{token: 'operator', next: '@pop'}]
+			[/\s*(=)\s*(?=new\s(@anyIdentifier)(\.@anyIdentifier)*\s+[^\,])/,{token: 'operator', next: '@pop'}]
 			[/\s*(=)\s*/,'operator','@var_value']
-			[/\{/,'object.open','@var_object.$S2']
-			[/\[/,'array.open','@var_array.$S2']
-			[/,/,'delimiter']
+			[/\{/,'delimiter.object.open','@var_object.$S2']
+			[/\[/,'delimiter.array.open','@var_array.$S2']
 			[/(,)(@newline)/,['delimiter','newline']]
+			[/,/,'delimiter']
 			[/@newline/, token: '@rematch', next: '@pop']
 			[/(?=\n)/,'delimiter','@pop']
 			{ include: 'spread' }
@@ -486,11 +490,12 @@ export var grammar = {
 			[/\`/, { token: 'string.open', next: '@string.\`' }],
 		],
 		number: [
+			[/0[xX][0-9a-fA-F]+/, 'number.hex'],
+			{ include: 'number_with_unit' }
 			[/\d+[eE]([\-+]?\d+)?/, 'number.float'],
 			[/\d+\.\d+([eE][\-+]?\d+)?/, 'number.float'],
-			[/0[xX][0-9a-fA-F]+/, 'number.hex'],
 			[/0[0-7]+(?!\d)/, 'number.octal'],
-			[/\d+/, 'number'],
+			[/\d+/, 'number']
 		],
 
 		number_with_unit: [
@@ -637,7 +642,6 @@ export var grammar = {
 			[/[;\)\}\]]/, token: '@rematch', next: '@pop'],
 			[/(xs|sm|md|lg|xl|\dxl)\b/, 'style.value.size'],
 			[/(--@anyIdentifier)/, 'style.value.var']
-			{ include: 'number_with_unit' }
 			{ include: 'operators' }
 			{ include: 'number' }
 			{ include: 'string_start' }

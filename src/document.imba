@@ -74,17 +74,18 @@ class Variables
 		tokens.push(token)
 		token.variable = token
 		token.varscope = scope
+		token.modifiers ||= []
 		map[token.value] = token
 	
 	def lookup name, deep = yes
 		if name[name.length - 1] == '!'
 			name = name.slice(0,-1)
 
-		let res = map[name]
+		let res = map.hasOwnProperty(name) and map[name]
 		if deep and !res and scope.parent
 			return scope.parent.variables.lookup(name)
-		if !scope.parent and !res and GlobalVars[name]
-			let tok = {value: name, varscope: scope, type: 'variable.global'}
+		if !scope.parent and !res and GlobalVars.hasOwnProperty(name)
+			let tok = {value: name, varscope: scope, modifiers:['global'], type: 'variable.global'}
 			return map[name] = tok.variable = tok
 		return res
 
