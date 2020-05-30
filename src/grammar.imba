@@ -171,7 +171,7 @@ export var grammar = {
 		]
 
 		object_key: [
-			[/(@anyIdentifier)\??(?=\:)/, 'identifier.key']
+			[/(@anyIdentifier)\??(\:)/, ['identifier.key','operator.assign.key']]
 		]
 
 		identifiers: [
@@ -339,7 +339,7 @@ export var grammar = {
 			{ include: 'common' }
 			{ include: 'string_start' }
 			{ include: 'comments' }
-			[/:/,'delimiter.object.value','@object_value']
+			[/:/,'operator.assign.key','@object_value']
 			[/\,/,'delimiter']
 		]
 
@@ -500,7 +500,7 @@ export var grammar = {
 		
 		operators: [
 			{include: 'spread'}
-			[/,/,'delimiter']
+			[/,/,'delimiter.comma']
 			[/@symbols/, { cases: {
 						'@operators': 'operator',
 						'@math': 'operator.math',
