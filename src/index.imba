@@ -1,3 +1,2 @@
-import { ImbaDocument } from './document'
-
-export { ImbaDocument }
+export { ImbaDocument } from './document'
+export { Monarch } from './monarch.imba'
