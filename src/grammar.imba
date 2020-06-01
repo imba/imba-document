@@ -15,9 +15,9 @@ export var grammar = {
 	ignoreCase: false,
 	tokenPostfix: '',
 	brackets: [
-		{ open: '{', close: '}', token: 'delimiter.curly' },
-		{ open: '[', close: ']', token: 'delimiter.square' },
-		{ open: '(', close: ')', token: 'delimiter.parenthesis' }
+		{ open: '{', close: '}', token: 'bracket.curly' },
+		{ open: '[', close: ']', token: 'bracket.square' },
+		{ open: '(', close: ')', token: 'bracket.parenthesis' }
 	],
 	keywords: [
 		'def', 'and', 'or', 'is', 'isnt', 'not', 'on', 'yes', '@', 'no', 'off',
@@ -38,7 +38,7 @@ export var grammar = {
 		'=', '!', '~', '?', ':','!!',
 		'&', '|', '^', '%', '<<',
 		'>>', '>>>', '+=', '-=', '*=', '/=', '&=', '|=', '?=',
-		'^=', '%=', '<<=', '>>=', '>>>=','..','...','||='
+		'^=', '%=', '<<=', '>>=', '>>>=','..','...','||=',`&&=`,'**=','**'
 	],
 	logic: [
 		'>', '<', '==', '<=', '>=', '!=', '&&', '||','===','!=='
@@ -115,7 +115,7 @@ export var grammar = {
 		]
 
 		parens_start: [
-			[/\(/, 'delimiter.parens.open', '@parens']
+			[/\(/, 'bracket.parenthesis.open', '@parens']
 		]
 
 		tag_value_expression: [
@@ -217,7 +217,7 @@ export var grammar = {
 		]
 
 		parens: [
-			[/\)/, 'delimiter.parens.close', '@pop']
+			[/\)/, 'bracket.parenthesis.close', '@pop']
 			{include: 'var_expr'}
 			{include: 'expression'}
 			[/\,/, 'delimiter']
@@ -324,7 +324,7 @@ export var grammar = {
 			[/\}/, '$S2.close', '@pop']
 			[/(@esmIdentifier)(\s+)(as)(\s+)(@esmIdentifier)/, ['alias','white','keyword.as','white',{token: 'variable.$S2'}]]
 			[/(@esmIdentifier)/, token: 'variable.$S2']
-			[/\,/,'delimiter']
+			[/\,/,'delimiter.comma']
 		]
 
 		import_statement: [
@@ -332,54 +332,61 @@ export var grammar = {
 		]
 
 		object: [
-			[/\{/, 'delimiter.bracket.open', '@object']
-			[/\}/, 'delimiter.bracket.close', '@pop']
+			[/\{/, 'bracket.curly.open', '@object']
+			[/\}/, 'bracket.curly.close', '@pop']
 			[/(@identifier)/, 'identifier.key']
+			[/\[/, 'bracket.square.open', '@object_dynamic_key']
 			{ include: 'common' }
 			{ include: 'string_start' }
 			{ include: 'comments' }
 			[/:/,'operator.assign.key','@object_value']
-			[/\,/,'delimiter']
+			[/\,/,'delimiter.comma']
+		]
+
+		object_dynamic_key: [
+			[/\]/, 'bracket.square.close', '@pop']
+			{include: 'expression'}
 		]
 
 		object_start: [
-			[/\{/, 'delimiter.bracket.open', '@object']
+			[/\{/, 'bracket.curly.open', '@object']
 		]
 
 		array_start: [
-			[/\[/, 'delimiter.array.open', '@array']
+			[/\[/, 'bracket.square.open', '@array']
 		]
 
 		array: [
-			[/\]/, 'delimiter.array.close', '@pop']
+			[/\]/, 'bracket.square.close', '@pop']
 			[/\,/, 'delimiter']
 			{include: 'expression'}
 		]
 
 		expressions: [
-			[/\,/, 'delimiter']
+			[/\,/, 'delimiter.comma']
 			{include: 'expression'}
 			
 		]
 
 		var_object: [
-			[/\{/, 'object.open', '@var_object']
-			[/\}/, 'object.close', '@pop']
+			[/\{/, 'bracket.curly.open', '@var_object']
+			[/\}/, 'delimiter.bracket.close', '@pop']
 			[/(@constant)/, token: 'variable.$S2.constant']
 			[/(@identifier)/, token: 'variable.$S2']
+			[/\=/,'operator.eq','@object_value']
 			{ include: 'common' }
-			[/\,/,'delimiter']
+			[/\,/,'delimiter.comma']
 		]
 
 		var_array: [
-			[/\{/, 'delimiter.object.open', '@var_object']
-			[/\}/, 'delimiter.object.close', '@pop']
-			[/\[/, 'delimiter.array.open', '@var_array']
-			[/\]/, 'delimiter.array.close', '@pop']
+			[/\{/, 'bracket.curly.open', '@var_object']
+			[/\}/, 'bracket.curly.close', '@pop']
+			[/\[/, 'bracket.square.open', '@var_array']
+			[/\]/, 'bracket.square.close', '@pop']
 			[/(@constant)/, token: 'variable.$S2.constant']
 			[/(@identifier)/, token: 'variable.$S2']
 			{ include: 'common' }
-			[/\,/,'delimiter']
+			[/\,/,'delimiter.comma']
 		]		
 
 		object_value: [
@@ -401,10 +408,10 @@ export var grammar = {
 			[/\s*(=)\s*(?=(for|while|until)\s)/,{token: 'operator', next: '@pop'}]
 			[/\s*(=)\s*(?=new\s(@anyIdentifier)(\.@anyIdentifier)*\s+[^\,])/,{token: 'operator', next: '@pop'}]
 			[/\s*(=)\s*/,'operator','@var_value']
-			[/\{/,'delimiter.object.open','@var_object.$S2']
-			[/\[/,'delimiter.array.open','@var_array.$S2']
+			[/\{/,'bracket.curly.open','@var_object.$S2']
+			[/\[/,'bracket.square.open','@var_array.$S2']
 			[/(,)(@newline)/,['delimiter','newline']]
-			[/,/,'delimiter']
+			[/,/,'delimiter.comma']
 			[/@newline/, token: '@rematch', next: '@pop']
 			[/(?=\n)/,'delimiter','@pop']
 			{ include: 'spread' }
@@ -452,7 +459,7 @@ export var grammar = {
 			[/[a-z_][A-Za-z\d\-\_]*/, token: 'identifier'],
 			
 
-			[/\(/, { token: 'paren.open', next: '@parens' }],
+			[/\(/, { token: 'bracket.parenthesis.open', next: '@parens' }],
 			
 			# whitespace
 			{ include: '@whitespace' },
@@ -490,10 +497,13 @@ export var grammar = {
 			[/\`/, { token: 'string.open', next: '@string.\`' }],
 		],
 		number: [
-			[/0[xX][0-9a-fA-F]+/, 'number.hex'],
+			[/0[xX][0-9a-fA-F_]+/, 'number.hex'],
+			[/0[b][01_]+/, 'number.binary'],
+			[/0[o][0-9_]+/, 'number.octal'],
 			{ include: 'number_with_unit' }
+			[/\d[\d_]*/, 'number.integer']
 			[/\d+[eE]([\-+]?\d+)?/, 'number.float'],
-			[/\d+\.\d+([eE][\-+]?\d+)?/, 'number.float'],
+			[/\d[\d_]*\.\d[\d_]*([eE][\-+]?\d+)?/, 'number.float'],
 			[/0[0-7]+(?!\d)/, 'number.octal'],
 			[/\d+/, 'number']
 		],
@@ -506,6 +516,7 @@ export var grammar = {
 		operators: [
 			{include: 'spread'}
 			[/,/,'delimiter.comma']
+			[/\&(?=[,\)])/,'operator.special.blockparam']
 			[/@symbols/, { cases: {
 						'@operators': 'operator',
 						'@math': 'operator.math',
@@ -523,7 +534,7 @@ export var grammar = {
 			[/###\s(css)/, {token: 'style.$1.open'}, '@style.$1'],
 			[/###/, {token: 'comment.block.open'}, '@comment.block'],
 			[/#(\s.+)?$/, 'comment'],
-			[/\/\/(.+)$/, 'comment'],
+			[/\/\/([^\/].*)?$/, 'comment'],
 		],
 
 		comment: [
@@ -542,7 +553,7 @@ export var grammar = {
 		]
 
 		tag: [
-			[/>/,'tag.close','@pop']
+			[/\/?>/,'tag.close','@pop']
 			[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,{token: 'tag.$S2'}]
 			[/(\-?\d+)/,{token: 'tag.$S2'}]
 
@@ -608,7 +619,7 @@ export var grammar = {
 			[/\#(-*[a-zA-Z][\w\-]*)+/, 'tag.singleton.ref']
 		],
 		tag_value: [
-			[/(?=(\>|\s))/, { token: '', next: '@pop' }],
+			[/(?=(\/?\>|\s))/, { token: '', next: '@pop' }],
 			{include: 'tag_value_expression'}
 		],
 
@@ -716,6 +727,7 @@ export var grammar = {
 
 		regexp_start: [
 			[/\/(?!\ )(?=([^\\\/]|\\.)+\/)/, { token: 'regexp.slash.open', bracket: '@open', next: '@regexp'}]
+			[/\/\/\//, { token: 'regexp.slash.open', bracket: '@open', next: '@hereregexp'}]
 		]
 		
 		regexp: [
