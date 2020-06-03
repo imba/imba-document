@@ -640,18 +640,20 @@ export var grammar = {
 		]
 
 		style_property: [
-			[/(@anyIdentifier)\|/, 'style.property.scope']
-			[/(--@anyIdentifier)/, 'style.property.var']
+			[/(@anyIdentifier)(\.)/, ['style.property.scope','style.property.scope.delimiter']]
+			[/((--|\$)@anyIdentifier)/, 'style.property.var']
 			[/(-*@anyIdentifier)/, 'style.property.name']
-			[/\@(@anyIdentifier)/, 'style.property.mixin']
-			[/\.(@anyIdentifier)/, 'style.property.scope']
+			[/\@(@anyIdentifier)/, 'style.property.scope']
+			[/\+(@anyIdentifier)/, 'style.property.scope']
+			# [/\.(@anyIdentifier)/, 'style.property.scope']
 		]
 
 		style_value: [
 			eolpop,
-			[/\s([\$\w\-]+(\.[\w\-]+)*[\:\=])/, token: '@rematch', next: '@pop'],
+			[/\s([\$\w\-]+([\.\@][\w\-]+)*[\:\=])/, token: '@rematch', next: '@pop'],
 			[/[;\)\}\]]/, token: '@rematch', next: '@pop'],
 			[/(xs|sm|md|lg|xl|\dxl)\b/, 'style.value.size'],
+			[/\#[0-9a-fA-F]+/, 'style.value.color.hex'],
 			[/(--@anyIdentifier)/, 'style.value.var']
 			{ include: 'operators' }
 			{ include: 'number' }
