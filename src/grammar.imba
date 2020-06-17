@@ -58,14 +58,22 @@ export var grammar = {
 	className: /[A-Z][A-Za-z\d\-\_]*|[A-Za-z\d\-\_]+/
 	methodName: /[A-Za-z\_][A-Za-z\d\-\_]*\=?/
 	identifier: /[a-z_][A-Za-z\d\-\_]*/
-	anyIdentifier: /[A-Za-z_\$][A-Za-z\d\-\_\$]*/
-	esmIdentifier: /\@?[A-Za-z_\$][A-Za-z\d\-\_\$]*/
+	mixinIdentifier: /\%[a-z_][A-Za-z\d\-\_]*/
+	anyIdentifier: /[A-Za-z_\$][\w\$]*(?:\-*[\w\$]+)*/
+	esmIdentifier: /[\@\%]?[A-Za-z_\$][A-Za-z\d\-\_\$]*/
 	propertyPath: /(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*\.)?(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*)/
 	tagNameIdentifier: /(?:[\w\-]+\:)?\w+(?:\-\w+)*/
 	variable: /[\w\$]+(?:-[\w\$]*)*/
 	varKeyword: /var|let|const/
 	newline: RegExp.new(newline)
 	tagIdentifier: /-*[a-zA-Z][\w\-]*/
+
+	cssPropertyKey: /[\@\.]*[\w\-\$]+(?:[\@\.]+[\w\-\$]+)*(?:\s*\:)/
+	cssVariable: /(?:--|\$)[\w\-\$]+/
+	cssPropertyName: /[\w\-\$]+/
+	cssModifier: /\@[\w\-\$]+/
+	cssUpModifier: /\.\.[\w\-\$]+/
+	cssIsModifier: /\.[\w\-\$]+/
 	
 	regEx: /\/(?!\/\/)(?:[^\/\\]|\\.)*\/[igm]*/,
 	
@@ -97,7 +105,6 @@ export var grammar = {
 			{ include: 'do' }
 			{ include: 'implicit_call' }
 			{ include: 'access' }
-			{ include: 'style_declaration' }
 			{ include: 'object_key' }
 			{ include: 'identifiers' }
 			{ include: 'tag_start' },
@@ -224,11 +231,11 @@ export var grammar = {
 		]
 
 		statements: [
+			{ include: 'css_statement' }
 			{ include: 'var_statement' }
 			{ include: 'forin_statement' }
 			{ include: 'prop_statement' }
 			{ include: 'def_statement' }
-			{ include: 'css_statement' }
 			{ include: '@class_statement' }
 			{ include: 'struct_statement' }
 			{ include: 'tag_statement' }
@@ -265,34 +272,100 @@ export var grammar = {
 		]
 
 		css_statement: [
-			[/^(\t*)(css)(\s)/, ['white',{token: 'keyword.$2'},{token: 'white', next: '@indented_style_selector.$1\t'}]],
+			[/^(\t*)(local|global)(\s)(css)(?=\s|$)/, ['white',{token: 'keyword'},'white',{token: 'keyword.css', next: '@css_body.$1\t'}]],
+			[/^(\t*)(css)(?=\s|$)/, ['white',{token: 'keyword.$2', next: '@css_body.$1\t'}]],
+			[/^(\t*)(@varKeyword)(\s)(@anyIdentifier)(\s*=\s*)(css)(?=\s|$)/,
+				['white',{token:'keyword.$2'},'white',{token: 'variable.$2'},'operator',{token: 'keyword.css', next: '@css_body.$1\t'}]],
+			[/^(\t*)(export)(\s)(@varKeyword)(\s)(@anyIdentifier)(\s*=\s*)(css)(?=\s|$)/,
+				['white',{token:'keyword.$2'},'white',{token:'keyword.$4'},'white',{token: 'variable.$4'},'operator',{token: 'keyword.css', next: '@css_body.$1\t'}]],
 		]
 
-		indented_style_body: [
-			[/^(\t*)(?=[^\{\t]*&)/,{cases: {
-				'$1==$S2': {token: 'white',next:'indented_style_selector.$1\t'}
+		css_body: [
+			[/^(\t*)(?=[^\t\n@newline])/,{cases: {
+				'$1==$S2': {token: 'white',next:'css_body.$1\t'}
 				'@default': { token: '@rematch', next: '@pop' }
 			}}]
-			[/^(\t*)(?=[^\t\n@newline])/, {
-				cases: {
-					'$1==$S2': 'still-here',
-					'@default': { token: '@rematch', next: '@pop' }
-				}
-			}]
 			{include: 'style_properties'}
 		]
 
-		indented_style_selector: [
-			[/\=/,{token: 'style.start-operator',switchTo: 'indented_style_body.$S2'}]
-			[/\{/,{token: 'style.open',switchTo: 'style_properties.}'}]
-			[/^/,{token: '@rematch', switchTo: '@indented_style_body.$S2'}]
-			[/\:([\w\-]+)/,'style.selector.pseudostate']
+		css_selector: [
+			# [/\:([\w\-]+)/,'style.selector.pseudostate']
+			
+			# eolpop,
+			# [/(\}|\)|\])/, { cases: {'$1==$S2': {token: '@rematch', next: '@pop'},'@default': 'invalid'}}],
+			[/(\}|\)|\])/, {token: '@rematch', next: '@pop'}],
+			[/@cssPropertyKey/,token: '@rematch',next:'@pop']
+			[/\%(@anyIdentifier)/,'style.selector.mixin']
+			[/\@(\.{0,2}[\w\-]+)/,'style.selector.modifier']
 			[/\.([\w\-]+)/,'style.selector.class-name']
+			[/\#([\w\-]+)/,'style.selector.id']
 			[/([\w\-]+)/,'style.selector.element']
 			[/(>|~|\+)/,'style.selector.operator']
+			[/(\*)/,'style.selector.element.any']
+			[/\$(@anyIdentifier)/,'style.selector.reference']
 			[/\&/,'style.selector.context']
-			[/[^\{\=]+/,'style.selector.name']
-			# push into [ and (
+			[/\(/,'delimiter.selector.parens.open','@css_selector_parens.)']
+			[/\[/,'delimiter.selector.attr.open','@css_selector_attr.]']
+			[/\s+/,'white']
+			[/,/,'style.selector.delimiter']
+			[/#(\s.+)?$/, 'comment']
+			[/^/, token: '@rematch', next: '@pop']
+		]
+		css_selector_parens: [
+			[/\)/, token: 'delimiter.selector.parens.close', next: '@pop']
+			{include: '@css_selector'}
+		]
+
+		css_selector_attr: [
+			[/\]/, token: 'delimiter.selector.parens.close', next: '@pop']
+			{include: '@css_selector'}
+		]
+
+		style_properties: [
+			[/(\}|\)|\])/, { cases: {
+				'$1==$S2': {token: 'style.close', next: '@pop'},
+				'@default': {token: 'invalid', next: '@pop'}
+			}}],
+			[/\s+/,'white']
+			[/@cssPropertyKey/,token:'@rematch',next:'@style_property']
+			[/(?=[\%\*\w\&\$\>\.\[\@\!]|\#[\w\-])/,token:'',next:'@css_selector.$S2']
+			[/#(\s.+)?$/, 'comment']
+		]
+
+		style_property: [
+			[/(@anyIdentifier)(\.)/, ['style.property.scope','style.property.scope.delimiter']]
+			[/(\d+)(@anyIdentifier)/, ['style.property.unit.number','style.property.unit.name']]
+			[/((--|\$)@anyIdentifier)/, 'style.property.var']
+			[/(-*@anyIdentifier)/, 'style.property.name']
+			[/\@\@+(@anyIdentifier)/, 'style.property.scope.outer']
+			[/\@(@anyIdentifier)/, 'style.property.scope']
+			[/\.\.+(@anyIdentifier)/, 'style.property.scope.class.outer']
+			[/\.(@anyIdentifier)/, 'style.property.scope.class']
+			[/\+(@anyIdentifier)/, 'style.property.scope']
+			[/\s*([\:]\s*)/, token: 'style.property.operator',switchTo: '@style_value.$S2']
+		]
+
+		style_value: [
+			eolpop,
+			[/@cssPropertyKey/, token: '@rematch', next: '@pop'],
+			[/;/, token: 'style.delimiter', next: '@pop'],
+			[/(\}|\)|\])/, {token: '@rematch', next: '@pop'}],
+			# [/(\}|\)|\])/, { cases: {'$1==$S2': {token: '@rematch', next: '@pop'}, '@default': 'invalid'}}],
+			[/(xs|sm|md|lg|xl|\dxl)\b/, 'style.value.size'],
+			[/\#[0-9a-fA-F]+/, 'style.value.color.hex'],
+			[/((--|\$)@anyIdentifier)/, 'style.value.var']
+			{ include: 'operators' }
+			{ include: 'number' }
+			{ include: 'string_start' }
+			{ include: 'comments' }
+			[/\(/, token: 'delimiter.style.parens.open', next: '@style_expressions.)']
+			[/(@anyIdentifier)/, 'style.value']
+		]
+
+		style_expressions: [
+			[/\)/, token: 'delimiter.style.parens.close', next: '@pop']
+			[/\(/, token: 'delimiter.style.parens.open', next: '@style_expressions.)']
+			{include: '@style_value'}
 		]
 
 		class_statement: [
@@ -501,9 +574,9 @@ export var grammar = {
 			[/0[b][01_]+/, 'number.binary'],
 			[/0[o][0-9_]+/, 'number.octal'],
 			{ include: 'number_with_unit' }
-			[/\d[\d_]*/, 'number.integer']
 			[/\d+[eE]([\-+]?\d+)?/, 'number.float'],
 			[/\d[\d_]*\.\d[\d_]*([eE][\-+]?\d+)?/, 'number.float'],
+			[/\d[\d_]*/, 'number.integer']
 			[/0[0-7]+(?!\d)/, 'number.octal'],
 			[/\d+/, 'number']
 		],
@@ -518,12 +591,12 @@ export var grammar = {
 			[/,/,'delimiter.comma']
 			[/\&(?=[,\)])/,'operator.special.blockparam']
 			[/@symbols/, { cases: {
-						'@operators': 'operator',
-						'@math': 'operator.math',
-						'@logic': 'operator.logic',
-						'@dot': 'operator.dot',
-						'@default': 'delimiter'
-					} }],
+				'@operators': 'operator',
+				'@math': 'operator.math',
+				'@logic': 'operator.logic',
+				'@dot': 'operator.dot',
+				'@default': 'delimiter'
+			} }],
 			[/\&\b/, 'operator']
 		],
 		whitespace: [
@@ -549,17 +622,17 @@ export var grammar = {
 
 		tag_start: [
 			[/(<)(?=\.)/, 'tag.open','@tag.flag'],
-			[/(<)(?=\w|\{|>)/,'tag.open','@tag.name']
+			[/(<)(?=\.)/, 'tag.open','@tag.flag'],
+			[/(<)(?=\w|\{|\[|\%|\#|>)/,'tag.open','@tag.name']
 		]
 
 		tag: [
 			[/\/?>/,'tag.close','@pop']
 			[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,{token: 'tag.$S2'}]
 			[/(\-?\d+)/,{token: 'tag.$S2'}]
-
 			[/\.\(/,token: 'style.open.$S2', next: '@style_properties.)']
-
-			[/(\$|\s)\(/,token: 'style.open.$S2', next: '@style_properties.)']
+			[/(\%@anyIdentifier)/,['tag.flag.mixin']]
+			[/(\#@anyIdentifier)/,['tag.id']]
 
 			[/\./,{ cases: {
 				'$S2==event': {token: 'tag.event-modifier.start', switchTo: 'tag.event-modifier'}
@@ -575,10 +648,8 @@ export var grammar = {
 				'@default': {token: 'tag.$S2'}
 			}}]
 
-			[/\$?{/,{ cases: {
-				'$S2==attr': {token: 'style.open', next: '@style_properties.}'}
-				'@default': {token: 'tag.$S2.braces.open', next: '@tag_interpolation.$S2'}
-			}}]
+			[/\{/,{token: 'tag.$S2.braces.open', next: '@tag_interpolation.$S2'}]
+			[/\[/,token: 'style.open', next: '@style_properties.]']
 
 			[/\[/,{ cases: {
 				'$S2==name': {token: 'tag.data.open', next: '@tag_data'}
@@ -594,7 +665,6 @@ export var grammar = {
 			
 			[/\s+/,token: 'white', switchTo: 'tag.attr']
 			{include: 'comments'}
-			[/\@(@tagIdentifier)/,token: 'tag.reference']
 		]
 		
 		tag_interpolation: [
@@ -623,51 +693,7 @@ export var grammar = {
 			{include: 'tag_value_expression'}
 		],
 
-		style_declaration: [
-			[/\.\{/,token: 'style.open.$S2', next: '@style_properties.}']
-		]
-
-		style_properties: [
-			[/(\}|\)|\])/, { cases: {
-					'$1==$S2': {token: 'style.close', next: '@pop'},
-					'@default': 'invalid'
-			}}],
-			{ include: 'comments'}
-			{ include: 'style_property'}
-			[/([\:]\s*)/, 'style.property.operator','@style_value']
-			[/\s+/, 'style.whitespace']
-			[/[\;]/, 'style.delimiter']
-		]
-
-		style_property: [
-			[/(@anyIdentifier)(\.)/, ['style.property.scope','style.property.scope.delimiter']]
-			[/((--|\$)@anyIdentifier)/, 'style.property.var']
-			[/(-*@anyIdentifier)/, 'style.property.name']
-			[/\@(@anyIdentifier)/, 'style.property.scope']
-			[/\+(@anyIdentifier)/, 'style.property.scope']
-			# [/\.(@anyIdentifier)/, 'style.property.scope']
-		]
-
-		style_value: [
-			eolpop,
-			[/\s([\$\w\-]+([\.\@][\w\-]+)*[\:\=])/, token: '@rematch', next: '@pop'],
-			[/[;\)\}\]]/, token: '@rematch', next: '@pop'],
-			[/(xs|sm|md|lg|xl|\dxl)\b/, 'style.value.size'],
-			[/\#[0-9a-fA-F]+/, 'style.value.color.hex'],
-			[/(--@anyIdentifier)/, 'style.value.var']
-			{ include: 'operators' }
-			{ include: 'number' }
-			{ include: 'string_start' }
-			{ include: 'comments' }
-			[/\(/, token: 'delimiter.style.parens.open', next: '@style_expressions.)']
-			[/(@anyIdentifier)/, 'style.value']
-		]
-
-		style_expressions: [
-			[/\)/, token: 'delimiter.style.parens.close', next: '@pop']
-			[/\(/, token: 'delimiter.style.parens.open', next: '@style_expressions.)']
-			{include: '@style_value'}
-		]
+		
 
 		braces: [
 			['}', { token: 'brace.close', next: '@pop' }],
