@@ -359,6 +359,7 @@ export var grammar = {
 			{ include: 'string_start' }
 			{ include: 'comments' }
 			[/\(/, token: 'delimiter.style.parens.open', next: '@style_expressions.)']
+			[/\{/, token: 'delimiter.style.curly.open', next: '@style_interpolation.}']
 			[/(@anyIdentifier)/, 'style.value']
 		]
 
@@ -367,6 +368,12 @@ export var grammar = {
 			[/\(/, token: 'delimiter.style.parens.open', next: '@style_expressions.)']
 			{include: '@style_value'}
 		]
+
+		style_interpolation: [
+			[/\}/, token: 'delimiter.style.curly.close', next: '@pop']
+			{include: '@expression'}
+		]
+
 
 		class_statement: [
 			[/(class)(\s)(@anyIdentifier)(\s)(\<)(\s)(@tagNameIdentifier)/, ['keyword.class','white.classname',types.decl_class_name,'white','operator.extends','white','entity.other.inherited-class']],
