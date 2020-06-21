@@ -318,8 +318,8 @@ export class ImbaDocument
 			return token.type == match
 		return false
 	
-	def before token, match, flat
-		let idx = tokens.indexOf(token)
+	def before token, match, offset = 0
+		let idx = tokens.indexOf(token) + offset
 		if match
 			while idx > 0
 				let tok = tokens[--idx]
@@ -383,8 +383,11 @@ export class ImbaDocument
 			textAfter: line.lineContent.slice(offset - line.offset)
 			mode: (token.stack ? token.stack.state : '').replace(/\.(\t+|\]|\}|\)|$)/g,'')
 			scope: line.context
+			css: {}
 		}
 
+		context.left = token.offset == offset ? prev : token
+		let ltyp = context.left ? context.left.type : ''
 		# context.tokenBefore = offset >= token.offset
 
 		let scope = context.scope
@@ -456,8 +459,31 @@ export class ImbaDocument
 			# not inside anywhere special?
 			context.tagName = after(scope.token)
 
+		if ltyp == 'style.property.modifier.prefix'
+			context.cssProperty = before(context.token,/style\.property\.name/)
+			mode = 'css_modifier'
+
 		if mode == 'css_value'
 			context.cssProperty = before(context.token,/style\.property\.name/)
+			context.css.value = 1
+
+			if let propstart = before(context.token,'style.property.operator',1)
+
+				let vbefore = content.slice(propstart.offset,offset).replace(/^\s*\:\s*/,'')
+				context.cssValue = {before: vbefore,index: vbefore.split(/\s+/g).length - 1}
+				if context.cssValue.index > 0
+					context.css.property = 1
+
+			if ltyp.match(/value\.white/)
+				context.css.property = 1
+				# context.css.modifier = 1
+
+		if ltyp.match(/(selector|property)\.modifier/)
+			mode = 'css_modifier'
+			context.css.modifier = 1
+
+		if mode.match(/^css_/)
+			context.css[mode.slice(4)] ||= yes
 		
 		context.scope = scope
 		context.mode = mode
@@ -473,6 +499,8 @@ export class ImbaDocument
 			if context.textBefore.match(/([^\.]\.\.|[^\.]\.)([\w\-\$]*)$/) 
 				context.mode = 'access'
 			yes
+		
+		context.css = null if Object.keys(context.css).length == 0
 		return context
 		
 
@@ -485,8 +513,6 @@ export class ImbaDocument
 		var toLine = range ? range.line : (lineCount - 1)
 		var added = 0
 		var lineCount = lineCount
-
-		console.log 'get tokens',lineCount,codelines
 
 		while head.line <= toLine
 			let i = head.line

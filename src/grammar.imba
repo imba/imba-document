@@ -60,6 +60,7 @@ export var grammar = {
 	identifier: /[a-z_][A-Za-z\d\-\_]*/
 	mixinIdentifier: /\%[a-z_][A-Za-z\d\-\_]*/
 	anyIdentifier: /[A-Za-z_\$][\w\$]*(?:\-*[\w\$]+)*/
+	anyIdentifierOpt: /(?:[A-Za-z_\$][\w\$]*(?:\-*[\w\$]+)*)?/
 	esmIdentifier: /[\@\%]?[A-Za-z_\$][A-Za-z\d\-\_\$]*/
 	propertyPath: /(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*\.)?(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*)/
 	tagNameIdentifier: /(?:[\w\-]+\:)?\w+(?:\-\w+)*/
@@ -289,14 +290,14 @@ export var grammar = {
 			# [/(\}|\)|\])/, { cases: {'$1==$S2': {token: '@rematch', next: '@pop'},'@default': 'invalid'}}],
 			[/(\}|\)|\])/, {token: '@rematch', next: '@pop'}],
 			[/@cssPropertyKey/,token: '@rematch',next:'@pop']
-			[/\%(@anyIdentifier)/,'style.selector.mixin']
-			[/\@(\.{0,2}[\w\-]+)/,'style.selector.modifier']
+			[/(\%)((?:@anyIdentifier)?)/,['style.selector.mixin.prefix','style.selector.mixin']]
+			[/(\@)(\.{0,2}[\w\-]*)/,['style.selector.modifier.prefix','style.selector.modifier']]
 			[/\.([\w\-]+)/,'style.selector.class-name']
 			[/\#([\w\-]+)/,'style.selector.id']
 			[/([\w\-]+)/,'style.selector.element']
 			[/(>|~|\+)/,'style.selector.operator']
 			[/(\*)/,'style.selector.element.any']
-			[/\$(@anyIdentifier)/,'style.selector.reference']
+			[/(\$)((?:@anyIdentifier)?)/,['style.selector.reference.prefix','style.selector.reference']]
 			[/\&/,'style.selector.context']
 			[/\(/,'delimiter.selector.parens.open','@css_selector_parens.)']
 			[/\[/,'delimiter.selector.attr.open','@css_selector_attr.]']
@@ -348,10 +349,13 @@ export var grammar = {
 			[/(xs|sm|md|lg|xl|\dxl)\b/, 'style.value.size'],
 			[/\#[0-9a-fA-F]+/, 'style.value.color.hex'],
 			[/((--|\$)@anyIdentifier)/, 'style.value.var']
+			[/(\s+)(@anyIdentifierOpt)(\@+|\.)(@anyIdentifierOpt)/,['style.value.white','style.property.name','style.property.modifier.prefix','style.property.modifier']]
+			# [/(@anyIdentifier)(\@+|\.+)(@anyIdentifierOpt)/,['style.property.name','style.property.modifier.prefix','style.property.modifier']]
 			{ include: 'operators' }
 			{ include: 'number' }
 			{ include: 'string_start' }
 			{ include: 'comments' }
+			[/\s+/,'style.value.white']
 			[/\(/, token: 'delimiter.style.parens.open', next: '@css_expressions.)']
 			[/\{/, token: 'delimiter.style.curly.open', next: '@css_interpolation.}']
 			[/(@anyIdentifier)/, 'style.value']
