@@ -226,6 +226,7 @@ export class ImbaDocument
 		content = body
 		_lineOffsets = null
 		invalidateFromLine(0)
+		
 		return self
 
 	def update changes, version
@@ -322,8 +323,10 @@ export class ImbaDocument
 		if match
 			while idx > 0
 				let tok = tokens[--idx]
+				
 				if matchToken(tok,match)
 					return tok
+			return null
 		return tokens[idx - 1]
 
 	def getTokenRange token
@@ -378,7 +381,7 @@ export class ImbaDocument
 			line: line.lineContent
 			textBefore: line.lineContent.slice(0,offset - line.offset)
 			textAfter: line.lineContent.slice(offset - line.offset)
-			mode: token.stack ? token.stack.state : ''
+			mode: (token.stack ? token.stack.state : '').replace(/\.(\t+|\]|\}|\)|$)/g,'')
 			scope: line.context
 		}
 
@@ -452,6 +455,9 @@ export class ImbaDocument
 		if scope.type == 'element'
 			# not inside anywhere special?
 			context.tagName = after(scope.token)
+
+		if mode == 'css_value'
+			context.cssProperty = before(context.token,/style\.property\.name/)
 		
 		context.scope = scope
 		context.mode = mode
@@ -479,6 +485,8 @@ export class ImbaDocument
 		var toLine = range ? range.line : (lineCount - 1)
 		var added = 0
 		var lineCount = lineCount
+
+		console.log 'get tokens',lineCount,codelines
 
 		while head.line <= toLine
 			let i = head.line

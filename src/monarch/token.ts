@@ -26,7 +26,7 @@ export class Token {
 	}
 
 	public toString(): string {
-		return '(' + this.offset + ', ' + this.type + ')';
+		return this.value || ''; // '(' + this.offset + ', ' + this.type + ')';
 	}
 
 	public match(val: any): boolean {

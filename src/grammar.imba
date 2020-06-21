@@ -272,12 +272,8 @@ export var grammar = {
 		]
 
 		css_statement: [
-			[/^(\t*)(local|global)(\s)(css)(?=\s|$)/, ['white',{token: 'keyword'},'white',{token: 'keyword.css', next: '@css_body.$1\t'}]],
-			[/^(\t*)(css)(?=\s|$)/, ['white',{token: 'keyword.$2', next: '@css_body.$1\t'}]],
-			[/^(\t*)(@varKeyword)(\s)(@anyIdentifier)(\s*=\s*)(css)(?=\s|$)/,
-				['white',{token:'keyword.$2'},'white',{token: 'variable.$2'},'operator',{token: 'keyword.css', next: '@css_body.$1\t'}]],
-			[/^(\t*)(export)(\s)(@varKeyword)(\s)(@anyIdentifier)(\s*=\s*)(css)(?=\s|$)/,
-				['white',{token:'keyword.$2'},'white',{token:'keyword.$4'},'white',{token: 'variable.$4'},'operator',{token: 'keyword.css', next: '@css_body.$1\t'}]],
+			[/^(\t*)(local|global|export)(\s)(css)(?=\s|$)/, ['white',{token: 'keyword'},'white',{token: 'keyword.css', next: '@css_body.$1\t'}]],
+			[/^(\t*)(css)(?=\s|$)/, ['white',{token: 'keyword.$2', next: '@css_body.$1\t'}]]
 		]
 
 		css_body: [
@@ -285,12 +281,10 @@ export var grammar = {
 				'$1==$S2': {token: 'white',next:'css_body.$1\t'}
 				'@default': { token: '@rematch', next: '@pop' }
 			}}]
-			{include: 'style_properties'}
+			{include: 'css_properties'}
 		]
 
 		css_selector: [
-			# [/\:([\w\-]+)/,'style.selector.pseudostate']
-			
 			# eolpop,
 			# [/(\}|\)|\])/, { cases: {'$1==$S2': {token: '@rematch', next: '@pop'},'@default': 'invalid'}}],
 			[/(\}|\)|\])/, {token: '@rematch', next: '@pop'}],
@@ -321,18 +315,18 @@ export var grammar = {
 			{include: '@css_selector'}
 		]
 
-		style_properties: [
+		css_properties: [
 			[/(\}|\)|\])/, { cases: {
 				'$1==$S2': {token: 'style.close', next: '@pop'},
 				'@default': {token: 'invalid', next: '@pop'}
 			}}],
 			[/\s+/,'white']
-			[/@cssPropertyKey/,token:'@rematch',next:'@style_property']
+			[/@cssPropertyKey/,token:'@rematch',next:'@css_property']
 			[/(?=[\%\*\w\&\$\>\.\[\@\!]|\#[\w\-])/,token:'',next:'@css_selector.$S2']
 			[/#(\s.+)?$/, 'comment']
 		]
 
-		style_property: [
+		css_property: [
 			[/(@anyIdentifier)(\.)/, ['style.property.scope','style.property.scope.delimiter']]
 			[/(\d+)(@anyIdentifier)/, ['style.property.unit.number','style.property.unit.name']]
 			[/((--|\$)@anyIdentifier)/, 'style.property.var']
@@ -342,10 +336,10 @@ export var grammar = {
 			[/\.\.+(@anyIdentifier)/, 'style.property.scope.class.outer']
 			[/\.(@anyIdentifier)/, 'style.property.scope.class']
 			[/\+(@anyIdentifier)/, 'style.property.scope']
-			[/\s*([\:]\s*)/, token: 'style.property.operator',switchTo: '@style_value.$S2']
+			[/\s*([\:]\s*)/, token: 'style.property.operator',switchTo: '@css_value.$S2']
 		]
 
-		style_value: [
+		css_value: [
 			eolpop,
 			[/@cssPropertyKey/, token: '@rematch', next: '@pop'],
 			[/;/, token: 'style.delimiter', next: '@pop'],
@@ -358,18 +352,18 @@ export var grammar = {
 			{ include: 'number' }
 			{ include: 'string_start' }
 			{ include: 'comments' }
-			[/\(/, token: 'delimiter.style.parens.open', next: '@style_expressions.)']
-			[/\{/, token: 'delimiter.style.curly.open', next: '@style_interpolation.}']
+			[/\(/, token: 'delimiter.style.parens.open', next: '@css_expressions.)']
+			[/\{/, token: 'delimiter.style.curly.open', next: '@css_interpolation.}']
 			[/(@anyIdentifier)/, 'style.value']
 		]
 
-		style_expressions: [
+		css_expressions: [
 			[/\)/, token: 'delimiter.style.parens.close', next: '@pop']
-			[/\(/, token: 'delimiter.style.parens.open', next: '@style_expressions.)']
-			{include: '@style_value'}
+			[/\(/, token: 'delimiter.style.parens.open', next: '@css_expressions.)']
+			{include: '@css_value'}
 		]
 
-		style_interpolation: [
+		css_interpolation: [
 			[/\}/, token: 'delimiter.style.curly.close', next: '@pop']
 			{include: '@expression'}
 		]
@@ -637,7 +631,7 @@ export var grammar = {
 			[/\/?>/,'tag.close','@pop']
 			[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,{token: 'tag.$S2'}]
 			[/(\-?\d+)/,{token: 'tag.$S2'}]
-			[/\.\(/,token: 'style.open.$S2', next: '@style_properties.)']
+			[/\.\(/,token: 'style.open.$S2', next: '@css_properties.)']
 			[/(\%@anyIdentifier)/,['tag.flag.mixin']]
 			[/(\#@anyIdentifier)/,['tag.id']]
 
@@ -656,14 +650,7 @@ export var grammar = {
 			}}]
 
 			[/\{/,{token: 'tag.$S2.braces.open', next: '@tag_interpolation.$S2'}]
-			[/\[/,token: 'style.open', next: '@style_properties.]']
-
-			[/\[/,{ cases: {
-				'$S2==name': {token: 'tag.data.open', next: '@tag_data'}
-				# '$S2==attr': {token: 'style.open', next: '@style_properties.]'}
-				'@default': {token: 'tag.data.open', next: '@tag_data'}
-			}}]
-			
+			[/\[/,token: 'style.open', next: '@css_properties.]']
 			[/(\s*\=\s*)/,token: 'tag.operator.equals', next: 'tag_value.$S2']
 			[/\:/,token: 'tag.rule.start', switchTo: 'tag.rule']
 			[/\@/,token: 'tag.event.start', switchTo: 'tag.event']
