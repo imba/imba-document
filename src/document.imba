@@ -307,8 +307,14 @@ export class ImbaDocument
 		self
 
 
-	def after token
+	def after token, match
 		let idx = tokens.indexOf(token)
+		if match
+			while idx < tokens.length
+				let tok = tokens[++idx]
+				if tok && matchToken(tok,match)
+					return tok
+			return null
 		return tokens[idx + 1]
 
 	def matchToken token, match
@@ -462,6 +468,17 @@ export class ImbaDocument
 		if ltyp == 'style.property.modifier.prefix'
 			context.cssProperty = before(context.token,/style\.property\.name/)
 			mode = 'css_modifier'
+
+		if mode == 'css_selector'
+			if ltyp == 'style.selector.element' and !context.textAfter
+				context.css.property = 1
+	
+			if let end = after(context.token,/^style\.property|line/)
+				let selafter = content.slice(offset,end.offset).replace(/(^\s+)|([\s\n]+$)/g,'')
+				context.cssSelector = {after: selafter}
+
+				if selafter == ''
+					context.css.property = 1
 
 		if mode == 'css_value'
 			context.cssProperty = before(context.token,/style\.property\.name/)
