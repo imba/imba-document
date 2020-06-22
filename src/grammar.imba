@@ -322,20 +322,21 @@ export var grammar = {
 				'@default': {token: 'invalid', next: '@pop'}
 			}}],
 			[/\s+/,'white']
-			[/@cssPropertyKey/,token:'@rematch',next:'@css_property']
+			[/(?=@cssPropertyKey)/,token:'',next:'@css_property.$S2']
 			[/(?=[\%\*\w\&\$\>\.\[\@\!]|\#[\w\-])/,token:'',next:'@css_selector.$S2']
 			[/#(\s.+)?$/, 'comment']
 		]
 
 		css_property: [
-			[/(@anyIdentifier)(\.)/, ['style.property.scope','style.property.scope.delimiter']]
+			# [/(@anyIdentifier)(\.)/, ['style.property.scope','style.property.scope.delimiter']]
 			[/(\d+)(@anyIdentifier)/, ['style.property.unit.number','style.property.unit.name']]
 			[/((--|\$)@anyIdentifier)/, 'style.property.var']
 			[/(-*@anyIdentifier)/, 'style.property.name']
-			[/\@\@+(@anyIdentifier)/, 'style.property.scope.outer']
-			[/\@(@anyIdentifier)/, 'style.property.scope']
-			[/\.\.+(@anyIdentifier)/, 'style.property.scope.class.outer']
-			[/\.(@anyIdentifier)/, 'style.property.scope.class']
+			[/(\@+|\.+)(@anyIdentifier\-?)/, ['style.property.modifier.start','style.property.modifier']]
+			# [/\@\@+(@anyIdentifier)/, 'style.property.scope.outer']
+			# [/\@(@anyIdentifier)/, 'style.property.scope']
+			# [/\.\.+(@anyIdentifier)/, 'style.property.scope.class.outer']
+			# [/\.(@anyIdentifier)/, 'style.property.scope.class']
 			[/\+(@anyIdentifier)/, 'style.property.scope']
 			[/\s*([\:]\s*)/, token: 'style.property.operator',switchTo: '@css_value.$S2']
 		]
@@ -349,7 +350,7 @@ export var grammar = {
 			[/(xs|sm|md|lg|xl|\dxl)\b/, 'style.value.size'],
 			[/\#[0-9a-fA-F]+/, 'style.value.color.hex'],
 			[/((--|\$)@anyIdentifier)/, 'style.value.var']
-			[/(\s+)(@anyIdentifierOpt)(\@+|\.)(@anyIdentifierOpt)/,['style.value.white','style.property.name','style.property.modifier.prefix','style.property.modifier']]
+			[/(@anyIdentifierOpt)(\@+|\.+)(@anyIdentifierOpt)/,['style.property.name','style.property.modifier.prefix','style.property.modifier']]
 			# [/(@anyIdentifier)(\@+|\.+)(@anyIdentifierOpt)/,['style.property.name','style.property.modifier.prefix','style.property.modifier']]
 			{ include: 'operators' }
 			{ include: 'number' }

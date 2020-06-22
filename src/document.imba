@@ -465,7 +465,7 @@ export class ImbaDocument
 			# not inside anywhere special?
 			context.tagName = after(scope.token)
 
-		if ltyp == 'style.property.modifier.prefix'
+		if ltyp == 'style.property.modifier.prefix' or ltyp == 'style.property.modifier'
 			context.cssProperty = before(context.token,/style\.property\.name/)
 			mode = 'css_modifier'
 
