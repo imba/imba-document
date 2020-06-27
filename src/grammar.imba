@@ -57,11 +57,12 @@ export var grammar = {
 	constant: /[A-Z][\w\$]*(?:\-[\w\$]+)*/
 	className: /[A-Z][A-Za-z\d\-\_]*|[A-Za-z\d\-\_]+/
 	methodName: /[A-Za-z\_][A-Za-z\d\-\_]*\=?/
-	identifier: /[a-z_][A-Za-z\d\-\_]*/
-	mixinIdentifier: /\%[a-z_][A-Za-z\d\-\_]*/
-	anyIdentifier: /[A-Za-z_\$][\w\$]*(?:\-*[\w\$]+)*/
-	anyIdentifierOpt: /(?:[A-Za-z_\$][\w\$]*(?:\-*[\w\$]+)*)?/
-	esmIdentifier: /[\@\%]?[A-Za-z_\$][A-Za-z\d\-\_\$]*/
+	subIdentifer: /(?:\-*[\w\$]+)*/
+	identifier: /[a-z_]@subIdentifer/
+	mixinIdentifier: /\%[a-z_]@subIdentifer/
+	anyIdentifier: /[A-Za-z_\$][\w\$]*@subIdentifer/
+	anyIdentifierOpt: /(?:[A-Za-z_\$][\w\$]*@subIdentifer)?/
+	esmIdentifier: /[\@\%]?[A-Za-z_\$]@subIdentifer/
 	propertyPath: /(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*\.)?(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*)/
 	tagNameIdentifier: /(?:[\w\-]+\:)?\w+(?:\-\w+)*/
 	variable: /[\w\$]+(?:-[\w\$]*)*/
@@ -347,7 +348,7 @@ export var grammar = {
 			[/;/, token: 'style.delimiter', next: '@pop'],
 			[/(\}|\)|\])/, {token: '@rematch', next: '@pop'}],
 			# [/(\}|\)|\])/, { cases: {'$1==$S2': {token: '@rematch', next: '@pop'}, '@default': 'invalid'}}],
-			[/(xs|sm|md|lg|xl|\dxl)\b/, 'style.value.size'],
+			[/(x?xs|sm\-?|md\-?|lg|xl|\dxl)\b/, 'style.value.size'],
 			[/\#[0-9a-fA-F]+/, 'style.value.color.hex'],
 			[/((--|\$)@anyIdentifier)/, 'style.value.var']
 			[/(@anyIdentifierOpt)(\@+|\.+)(@anyIdentifierOpt)/,['style.property.name','style.property.modifier.prefix','style.property.modifier']]
@@ -637,8 +638,8 @@ export var grammar = {
 			[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,{token: 'tag.$S2'}]
 			[/(\-?\d+)/,{token: 'tag.$S2'}]
 			[/\.\(/,token: 'style.open.$S2', next: '@css_properties.)']
-			[/(\%@anyIdentifier)/,['tag.flag.mixin']]
-			[/(\#@anyIdentifier)/,['tag.id']]
+			[/(\%)(@anyIdentifier)/,['tag.mixin.prefix','tag.mixin']]
+			[/(\#)(@anyIdentifier)/,['tag.id.prefix','tag.id']]
 
 			[/\./,{ cases: {
 				'$S2==event': {token: 'tag.event-modifier.start', switchTo: 'tag.event-modifier'}
@@ -657,7 +658,7 @@ export var grammar = {
 			[/\{/,{token: 'tag.$S2.braces.open', next: '@tag_interpolation.$S2'}]
 			[/\[/,token: 'style.open', next: '@css_properties.]']
 			[/(\s*\=\s*)/,token: 'tag.operator.equals', next: 'tag_value.$S2']
-			[/\:/,token: 'tag.rule.start', switchTo: 'tag.rule']
+			[/\:/,token: 'tag.event.start', switchTo: 'tag.event']
 			[/\@/,token: 'tag.event.start', switchTo: 'tag.event']
 			[/\{/,token: 'tag.$S2.braces.open', next: '@tag_interpolation.$S2']
 			[/\(/,token: 'tag.parens.open.$S2', next: '@tag_parens.$S2']
