@@ -10,4 +10,4 @@ export class Monarch
 
 	static def createTokenizer langId, grammar
 		let compiled = compile(langId,grammar)
-		tokenizers[langId] = MonarchTokenizer.new(langId,compiled)
+		tokenizers[langId] = new MonarchTokenizer(langId,compiled)

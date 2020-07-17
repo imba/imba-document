@@ -97,7 +97,7 @@ class TokenScope
 		token = token
 		end = null
 		endIndex = null
-		variables = Variables.new(self)
+		variables = new Variables(self)
 
 		if token.type.match(/(\w+)\.open/)
 			pair = token.type.replace('open','close')
@@ -115,7 +115,7 @@ class TokenScope
 		ScopeTypes[type] or ScopeTypes.flow
 
 	def sub token,type,line
-		TokenScope.new(doc: null, parent: self, token: token, type: type, line: line)
+		new TokenScope(doc: null, parent: self, token: token, type: type, line: line)
 
 	get chain
 		let items = [self]
@@ -149,7 +149,7 @@ class TokenScope
 export class ImbaDocument
 
 	static def tmp content
-		self.new('file://temporary.imba','imba',0,content)
+		new self('file://temporary.imba','imba',0,content)
 
 	def constructor uri, languageId, version, content
 		uri = uri
@@ -160,7 +160,7 @@ export class ImbaDocument
 
 		lineTokens = []
 		tokens = []
-		rootScope = TokenScope.new(doc: self, token: {offset: 0, type: 'root'}, type: 'root', line: {indent: -1}, parent: null)
+		rootScope = new TokenScope(doc: self, token: {offset: 0, type: 'root'}, type: 'root', line: {indent: -1}, parent: null)
 		head = start = {
 			index: 0
 			line: 0
@@ -581,7 +581,7 @@ export class ImbaDocument
 
 				let match
 
-				if match = tok.type.match(/keyword\.(class|def|set|get|prop|tag|if|for|while|do|elif|unless|try|catch|else)/)
+				if match = tok.type.match(/keyword\.(class|def|set|get|prop|tag|if|for|while|do|elif|unless|try|catch|else|constructor)/)
 					tok.scope = scope = scope.sub(tok,match[1],lineToken)
 				elif TokenScopeTypes[tok.type]
 					tok.scope = scope = scope.sub(tok,TokenScopeTypes[tok.type],lineToken)

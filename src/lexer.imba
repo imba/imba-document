@@ -7,4 +7,4 @@ import {MonarchTokenizer} from './monarch/lexer'
 export {Token} from './monarch/token'
 
 var compiled = compile('imba',grammar)
-export const lexer = MonarchTokenizer.new('imba',compiled)
+export const lexer = new MonarchTokenizer('imba',compiled)

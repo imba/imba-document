@@ -1,6 +1,13 @@
 import { ImbaDocument } from '../src/index'
 
-import sample from './docs/test.imba.raw'
+# import sample from './docs/test.imba.raw'
+var sample2 = """
+tag hello
+	def render
+		<self @event.one.two=10>
+"""
+
+import {body as sample} from './sample'
 
 class EditableEvent < CustomEvent
 
@@ -28,6 +35,8 @@ def highlight tokens
 			types = ['variable']
 			if token.variable.varscope
 				types.push("scope_{token.variable.varscope.type}")
+			if token.variable.modifiers
+				types.push(...token.variable.modifiers)
 
 		if typ != 'white' and typ != 'line'
 			value = "<span class='{types.join(' ')}' data-offset={token.offset}>{escape(value)}</span>"
@@ -46,8 +55,8 @@ def highlight tokens
 
 
 # let content = migrateLegacyDocument(sample.body)
-let original = ImbaDocument.tmp(sample.body)
-let doc = ImbaDocument.new('/source.imba','imba',1,original.migrateToImba2!)
+let original = ImbaDocument.tmp(sample)
+let doc = new ImbaDocument('/source.imba','imba',1,original.migrateToImba2!)
 
 tag app-root
 
@@ -65,7 +74,7 @@ tag app-root
 
 	def sendCustom
 		let o = {detail: {one: 1}}
-		var event = EditableEvent.new('stuff',o)
+		var event = new EditableEvent('stuff',o)
 		let res = dispatchEvent(event)
 		console.log event,res
 
@@ -78,9 +87,8 @@ tag app-root
 			<pre> <code innerHTML=highlight(doc.getTokens!) contentEditable='true' spellcheck=false>
 			# <pre> <code innerHTML=highlight(original.getTokens!) contentEditable='true' spellcheck=false>
 
-### css
 
-:root {
+global css @root
 	--token: #E3E3E3;
 	--identifier: #9dcbeb;
 	--background: #282c34;
@@ -102,40 +110,36 @@ tag app-root
 	--property: #F7FAFC;
 	--root-variable: #c5badc;
 	tab-size: 4;
-}
 
-:focus {
-	outline: none;
-}
+	*@focus
+		outline: none
 
-body {
-	color: var(--token);
-	background-color: var(--background);
-	padding: 80px;
-}
+	body
+		color: var(--token)
+		background-color: var(--background)
+		padding: 80px
 
-pre,code {
-	font-family: 'Fira Code Light','Source Code Pro',monospace;
-	font-size: 14px;
-	font-weight: bold;
-}
-.invalid { color: red; }
-.comment { color: var(--comment); }
-.regexp { color: var(--regexp); }
-.tag { color: var(--tag); }
-.type { color: var(--type); }
-.keyword,.argparam { color: var(--keyword); }
-.operator { color: var(--operator); }
-.property { color: var(--property); }
-.numeric,.number { color: var(--numeric); }
-.boolean { color: var(--boolean); }
-.null { color: var(--null); }
-.identifier { color: var(--identifier); }
-.variable { color: var(--variable); }
-.string { color: var(--string); }
-.propname { color: var(--entity); }
-.this,.self { color: var(--this); }
-.tag.open,.tag.close { color: var(--tag-angle); }
-.variable.scope_root { color: var(--root-variable); }
+	pre,code
+		font-family: 'Fira Code Light','Source Code Pro',monospace
+		font-size: 14px
+		font-weight: bold
 
-###
+	.invalid color: red
+	.comment color: var(--comment)
+	.regexp color: var(--regexp)
+	.tag color: var(--tag)
+	.type color: var(--type)
+	.keyword,.argparam color: var(--keyword)
+	.operator color: var(--operator)
+	.property color: var(--property)
+	.numeric,.number color: var(--numeric)
+	.boolean color: var(--boolean)
+	.null color: var(--null)
+	.identifier color: var(--identifier)
+	.variable color: var(--variable)
+	.string color: var(--string)
+	.propname color: var(--entity)
+	.this,.self color: var(--this)
+	.tag.open,.tag.close color: var(--tag-angle)
+	.variable.scope_root color: var(--root-variable)
+	.entity.name.class color: var(--entity)

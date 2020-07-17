@@ -35,10 +35,11 @@ export var grammar = {
 		'from', 'global', 'attr','prop'
 	],
 	operators: [
-		'=', '!', '~', '?', ':','!!',
-		'&', '|', '^', '%', '<<',
+		'=', '!', '~', '?', ':','!!','??',
+		'&', '|', '^', '%', '<<','!&',
 		'>>', '>>>', '+=', '-=', '*=', '/=', '&=', '|=', '?=',
-		'^=', '%=', '<<=', '>>=', '>>>=','..','...','||=',`&&=`,'**=','**'
+		'^=', '%=', '~=', '<<=', '>>=', '>>>=','..','...','||=',`&&=`,'**=','**',
+		'|=?','~=?','^=?','=?'
 	],
 	logic: [
 		'>', '<', '==', '<=', '>=', '!=', '&&', '||','===','!=='
@@ -65,9 +66,9 @@ export var grammar = {
 	esmIdentifier: /[\@\%]?[A-Za-z_\$]@subIdentifer/
 	propertyPath: /(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*\.)?(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*)/
 	tagNameIdentifier: /(?:[\w\-]+\:)?\w+(?:\-\w+)*/
-	variable: /[\w\$]+(?:-[\w\$]*)*/
+	variable: /[\w\$]+(?:-[\w\$]*)*\??/
 	varKeyword: /var|let|const/
-	newline: RegExp.new(newline)
+	newline: new RegExp(newline)
 	tagIdentifier: /-*[a-zA-Z][\w\-]*/
 
 	cssPropertyKey: /[\@\.]*[\w\-\$]+(?:[\@\.]+[\w\-\$]+)*(?:\s*\:)/
@@ -237,6 +238,7 @@ export var grammar = {
 			{ include: 'var_statement' }
 			{ include: 'forin_statement' }
 			{ include: 'prop_statement' }
+			{ include: 'ctor_statement' }
 			{ include: 'def_statement' }
 			{ include: '@class_statement' }
 			{ include: 'struct_statement' }
@@ -268,9 +270,15 @@ export var grammar = {
 		]
 
 		def_statement: [
-			[/(def|set|get)(\s)(@propertyPath\??)(\s)(?=\{|\w|\[|\.\.\.|\*)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'white.params', next: '@implicit_params_decl.param'}]],
-			[/(def|set|get)(\s)(@propertyPath\??)(\()/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'},{token: 'params.param.open', next: '@var_parens.param'}]],
-			[/(def|set|get)(\s)(@propertyPath\??)/, [{token: 'keyword.$1'},'white.propname',{token: 'identifier.$1.propname'}]],
+			[/((?:static\s)?)(def|set|get)(\s)(@propertyPath\??)(\s)(?=\{|\w|\[|\.\.\.|\*)/, [{token: 'keyword.$1'},{token: 'keyword.$2'},'white.propname',{token: 'identifier.$2.propname'},{token: 'white.params', next: '@implicit_params_decl.param'}]],
+			[/((?:static\s)?)(def|set|get)(\s)(@propertyPath\??)(\()/, [{token: 'keyword.$1'},{token: 'keyword.$2'},'white.propname',{token: 'identifier.$2.propname'},{token: 'params.param.open', next: '@var_parens.param'}]],
+			[/((?:static\s)?)(def|set|get)(\s)(@propertyPath\??)/, [{token: 'keyword.$1'},{token: 'keyword.$2'},'white.propname',{token: 'identifier.$2.propname'}]],
+		]
+
+		ctor_statement: [
+			[/(constructor)(\s)(?=\{|\w|\[|\.\.\.|\*)/, [{token: 'keyword.def.constructor'},{token: 'white.params', next: '@implicit_params_decl.param'}]],
+			[/(constructor)(\s?)(\()/, [{token: 'keyword.def.constructor'},'white.params',{token: 'params.param.open', next: '@var_parens.param'}]],
+			[/(constructor)/, [{token: 'keyword.def.constructor'}]]
 		]
 
 		css_statement: [
@@ -408,7 +416,7 @@ export var grammar = {
 		]
 
 		import_statement: [
-			[/(import)/,'keyword.import','@import_body.start']
+			[/(import)(?=\s|$)/,'keyword.import','@import_body.start']
 		]
 
 		object: [
