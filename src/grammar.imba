@@ -1,15 +1,4 @@
-
-const newline = String.fromCharCode(172)
-
-# var eolpop = [/@newline/, token: '@rematch', next: '@pop']
-var eolpop = [/^/, token: '@rematch', next: '@pop']
-
-export var types =
-	decl_class_name: 'entity.name.type.class'
-	decl_tag_name: 'entity.name.type.class'
-	decl_prop_name: 'entity.name.type.property'
-	decl_def_name: 'entity.name.function'
-
+const eolpop = [/^/, token: '@rematch', next: '@pop']
 const repop = { token: '@rematch', next: '@pop',_pop:'pop'}
 const toodeep = {token: 'white.indent',next: '@>illegal_indent'}
 
@@ -18,7 +7,6 @@ def denter indent,outdent,stay
 		indent = toodeep
 
 	elif indent == 1
-		indent = {next: '@$S1.$S2\t.$S3.$S4'}
 		indent = {next: '@>'}
 
 	if outdent == -1
@@ -32,7 +20,7 @@ def denter indent,outdent,stay
 	stay = Object.assign({token: 'white'},stay or {})
 	outdent = Object.assign({ token: '@rematch', next: '@pop'},outdent or {})
 
-	[/^\t*(?=[^\t\n@newline])/,{cases: {
+	[/^\t*(?=[^\t\n])/,{cases: {
 		'$#==$S2\t': indent
 		'$#==$S2': stay
 		'@default': outdent
@@ -62,7 +50,7 @@ export var states = {
 	]
 
 	body: [
-		[/^(\t+)(?=[^\t\n@newline])/,{cases: {
+		[/^(\t+)(?=[^\t\n])/,{cases: {
 			'$1==$S2\t': {token: 'white.indent',next: '@>illegal_indent'}
 			'@default': 'white.indent'
 		}}]
@@ -373,7 +361,7 @@ export var states = {
 	
 	flow_: [
 		# [/(else)(?=\s|$)/, ['keyword.$1','@flow_start.$S2.flow.$S4']]
-		[/(if|else|elif|unless)(?=\s|$|@newline)/, ['keyword.$1','@flow_start&$1']]
+		[/(if|else|elif|unless)(?=\s|$)/, ['keyword.$1','@flow_start&$1']]
 	]
 
 	flow_start: [
@@ -423,7 +411,7 @@ export var states = {
 
 	field_: [
 		[/static(?=\s+@anyIdentifier)/,'keyword.static']
-		[/(@anyIdentifier\??)(?=@newline|$)/,'field']
+		[/(@anyIdentifier\??)(?=$)/,'field']
 		[/(@anyIdentifier\??)/,['field','@_field_1']]
 	]
 
@@ -946,7 +934,7 @@ export var grammar = {
 	escapes: /\\(?:[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 	postaccess: /(:(?=\w))?/
 	ivar: /\@[a-zA-Z_]\w*/
-	B: /(?=\s|@newline|$)/
+	B: /(?=\s|$)/
 	constant: /[A-Z][\w\$]*@subIdentifer/
 	className: /[A-Z][A-Za-z\d\-\_]*|[A-Za-z\d\-\_]+/
 	methodName: /[A-Za-z\_][A-Za-z\d\-\_]*\=?/
@@ -962,7 +950,6 @@ export var grammar = {
 	tagNameIdentifier: /(?:[\w\-]+\:)?\w+(?:\-\w+)*/
 	variable: /[\w\$]+(?:-[\w\$]*)*\??/
 	varKeyword: /var|let|const/
-	newline: new RegExp(newline)
 	tagIdentifier: /-*[a-zA-Z][\w\-]*/
 	implicitCall: /(?=\s[\w\'\"\/\[\{])/ # not true for or etc
 	cssPropertyKey: /[\@\.]*[\w\-\$]+(?:[\@\.]+[\w\-\$]+)*(?:\s*\:)/

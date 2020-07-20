@@ -1,4 +1,4 @@
-import { ImbaDocument } from '../src/index'
+import { ImbaDocument,lexer } from '../src/index'
 import * as utils from '../src/utils'
 
 # import sample from './docs/test.imba.raw'
@@ -10,6 +10,9 @@ tag hello
 
 import {body as sample} from './sample'
 import {body as sampleTags} from './sample-tags'
+
+let rawtokens = lexer.tokenize(sample,lexer.getInitialState!,0)
+console.log 'rawtokens',rawtokens
 
 class EditableEvent < CustomEvent
 
@@ -195,11 +198,13 @@ tag app-root
 	def mount
 		render!
 		$code.innerHTML = highlight(doc.getTokens!)
+		$code2.innerHTML = highlight(rawtokens.tokens)
 			
 	def render
 		<self.hbox.grow[ff:sans] @selectstart=reselected  @pointerover=pointerover>
 			# <button :click.sendCustom> "custom!"
 			<pre> <code$code contentEditable='true' spellcheck=false>
+			<pre> <code$code2 contentEditable='true' spellcheck=false>
 			<h2> "Quick outline"
 			<outline-part data=outline>
 			# <pre> <code innerHTML=highlight(original.getTokens!) contentEditable='true' spellcheck=false>
@@ -276,5 +281,5 @@ global css @root
 	.push outline:1px solid green4 d:inline-block
 	.pop outline:1px solid red4 d:inline-block
 	.highlight bg:yellow3/20
-	.scope bg:gray3/2 .l1:clear prefix:'ƒ'
+	.scope bg:gray3/2 .l1:clear
 

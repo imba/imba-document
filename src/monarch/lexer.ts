@@ -587,7 +587,7 @@ export class MonarchTokenizer implements ITokenizationSupport {
 		}
 
 		if(lastToken && !lastToken.value){
-			lastToken.value = line.slice(lastToken.offset - offsetDelta,-1);
+			lastToken.value = line.slice(lastToken.offset - offsetDelta);
 		}
 
 		return MonarchLineStateFactory.create(stack);

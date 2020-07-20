@@ -1,4 +1,9 @@
 export const body = `
+if true
+	10
+else
+	5
+
 const f1 = 'desc'
 const c1 = [f1,1,2], c2 = 'hello',[c3,c4] = [f1,2],c5 = f1
 
@@ -9,8 +14,9 @@ import \{imp1,imp2,test as imp3\} from './hello'
 
 export class Hello < Other # hello
 
-	def render
+	def render param
 		[i1,i2,n1]
+		param = param
 		yes
 
 	def other
