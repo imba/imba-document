@@ -22,6 +22,11 @@ export interface ITokenizationSupport {
 
 const CACHE_STACK_DEPTH = 5;
 
+function statePart(state: string,index: number):string {
+	return state.split('.')[index];
+}
+
+
 /**
  * Reuse the same stack elements up to a certain depth.
  */
@@ -100,6 +105,18 @@ class MonarchStackElement {
 			return true;
 		}
 		return false;
+	}
+
+	public get indent(): number {
+		return this.state.lastIndexOf('\t') - this.state.indexOf('\t');
+	}
+
+	public get scope(): string {
+		return this.part(2);
+	}
+
+	public part(index:number): string {
+		return this.state.split('.')[index]
 	}
 
 	public equals(other: MonarchStackElement): boolean {
@@ -294,6 +311,7 @@ export class MonarchTokenizer implements ITokenizationSupport {
 		// See https://github.com/Microsoft/monaco-editor/issues/1235:
 		// Evaluate rules at least once for an empty line
 		let forceEvaluation = true;
+		let append:string[] = [];
 
 		while (forceEvaluation || pos < lineLength) {
 
@@ -402,17 +420,31 @@ export class MonarchTokenizer implements ITokenizationSupport {
 				}
 
 				if (action.switchTo && typeof action.switchTo === 'string') {
-					let indenting = action.switchTo.indexOf('\t') > 0;
-					if(indenting) tokensCollector.emit(pos0 + offsetDelta, 'push', stack);
+					// let indenting = action.switchTo.indexOf('\t') > 0;
+					// if(indenting) tokensCollector.emit(pos0 + offsetDelta, 'push', stack);
+					
+					// can do a quick check just for the action?
 
 					let nextState = monarchCommon.substituteMatches(this._lexer, action.switchTo, matched, matches, state);  // switch state without a push...
 					if (nextState[0] === '@') {
 						nextState = nextState.substr(1); // peel off starting '@'
 					}
+
 					if (!monarchCommon.findRules(this._lexer, nextState)) {
 						throw monarchCommon.createError(this._lexer, 'trying to switch to a state \'' + nextState + '\' that is undefined in rule: ' + this._safeRuleName(rule));
 					} else {
+						let from = stack.scope;
+						let to = statePart(nextState,2);
+						if(from !== to){
+							if(stack.parent && stack.parent.scope !== from){
+								append.push('pop.'+from)
+								// tokensCollector.emit(pos0 + offsetDelta, 'pop.'+from, stack);
+							}
+							append.push('push.'+to)
+							// tokensCollector.emit(pos0 + offsetDelta, 'push.'+to, stack);
+						}
 						stack = stack.switchTo(nextState);
+
 					}
 				} else if (action.transform && typeof action.transform === 'function') {
 					throw monarchCommon.createError(this._lexer, 'action.transform not supported');
@@ -430,38 +462,36 @@ export class MonarchTokenizer implements ITokenizationSupport {
 						} else {
 							let prev = stack;
 							stack = stack.pop()!;
-							let pi0 = prev.state.indexOf('\t');
-							let pi1 = prev.state.lastIndexOf('\t');
-							let pi = pi1 - pi0;
-
-							let ci0 = stack.state.indexOf('\t');
-							let ci1 = stack.state.lastIndexOf('\t');
-							let ci = ci1 - ci0;
-
-							if( pi > ci ){
-								console.log('outdented!!',pi - ci);
-								tokensCollector.emit(pos0 + offsetDelta, 'pop', stack);
+							if( prev.indent > stack.indent ){
+								console.log('outdented!!',prev.indent - stack.indent);
+								// tokensCollector.emit(pos0 + offsetDelta, 'pop', stack);
 							}
 
-							if(action._pop && false){
-								// console.log(pi1,pi0,ci1,ci0);
-								// console.log('popping empty token!!',prev,stack);
-								tokensCollector.emit(pos0 + offsetDelta, action._pop, stack);
+							let from = statePart(prev.state,2);
+							let to = statePart(stack.state,2);
+
+							if(from !== to){
+								append.push('pop.'+from)
+								// tokensCollector.emit(pos0 + offsetDelta, 'pop.'+from, stack);
 							}
 						}
 					} else if (action.next === '@popall') {
 						stack = stack.popall();
 					} else {
-						let indenting = action.next.indexOf('\t') > 0;
-						if(indenting) tokensCollector.emit(pos0 + offsetDelta, 'push', stack);
+						// let indenting = action.next.indexOf('\t') > 0;
+						// if(indenting) tokensCollector.emit(pos0 + offsetDelta, 'push', stack);
 						let nextState = monarchCommon.substituteMatches(this._lexer, action.next, matched, matches, state);
+
 						if (nextState[0] === '@') {
 							nextState = nextState.substr(1); // peel off starting '@'
 						}
 
+						let nextScope = statePart(nextState,2);
+
 						if (!monarchCommon.findRules(this._lexer, nextState)) {
 							throw monarchCommon.createError(this._lexer, 'trying to set a next state \'' + nextState + '\' that is undefined in rule: ' + this._safeRuleName(rule));
 						} else {
+							if(nextScope != stack.scope) append.push('push.'+nextScope)
 							stack = stack.push(nextState);
 						}
 					}
@@ -522,6 +552,7 @@ export class MonarchTokenizer implements ITokenizationSupport {
 				// check progress
 				if (matched.length === 0) {
 					if (lineLength === 0 || stackLen0 !== stack.depth || state !== stack.state || (!groupMatching ? 0 : groupMatching.groups.length) !== groupLen0) {
+						while(append.length > 0){ tokensCollector.emit(pos0 + offsetDelta, append.shift() as string, stack); }
 						continue;
 					} else {
 						throw monarchCommon.createError(this._lexer, 'no progress in tokenizer in rule: ' + this._safeRuleName(rule));
@@ -550,6 +581,8 @@ export class MonarchTokenizer implements ITokenizationSupport {
 					lastToken.value = line.slice(lastToken.offset - offsetDelta,pos0);
 				}
 				lastToken = token;
+
+				while(append.length > 0){ tokensCollector.emit(pos0 + offsetDelta, append.shift() as string, stack); }
 			}
 		}
 

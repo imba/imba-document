@@ -36,14 +36,62 @@ def escape str
 def classify types
 	types.join(' ').replace(/[\[\]\{\}\(\)]/g) do(m) typenames[m]
 
+def analyze tokens
+	let scope = null
+	let scopes = []
+	let vars = {}
+	let counter = 1
+	for token in tokens
+		let types = token.type.split('.')
+		let value = token.value
+
+		let [typ,subtyp] = types
+
+		if typ == 'push'
+			token.parent = scope
+			token.vars = Object.create(scope ? scope.vars : vars)
+			scopes.unshift(scope = token)
+
+		if typ == 'pop'
+			scope.end = token
+			scopes.shift!
+			scope = scopes[0]
+
+		if typ == 'identifier'
+			
+			if subtyp == 'const' or subtyp == 'let' or subtyp == 'param'
+				# console.log 'register var',value,subtyp
+				scope.vars[value] = token
+				token.vtyp = subtyp
+				token.vvar = token
+				token.vid = counter++
+				token.refs = []
+			else
+				# console.log 'found identifier',types
+				if let variable = scope.vars[value]
+					token.vvar = variable
+					variable.refs.push(token)
+
+	return tokens
+
+
 def highlight tokens
 	let parts = []
 	console.log(tokens)
 	let depth = 0
+	tokens = analyze(tokens)
+
 	for token in tokens
 		let value = token.value
 		let types = token.type.split('.')
 		let [typ,subtyp] = types
+
+		if token.vvar
+			types.push('vref')
+			types.push('var'+token.vvar.vid)
+			types.push(token.vvar.vtyp + '-ref')
+			if token.vvar == token
+				types.push('decl')
 
 		if token.variable
 			types.push('var')
@@ -54,8 +102,12 @@ def highlight tokens
 
 		if typ == 'push'
 			value = String(++depth)
+			parts.push("<span class='scope _{subtyp} l{depth}'>")
+			continue
 		elif typ == 'pop'
 			value = String(--depth)
+			parts.push("</span>")
+			continue
 
 		if typ != 'whitez' and typ != 'line'
 			# console.log 'classes',types
@@ -71,6 +123,7 @@ def highlight tokens
 			value = "{value}</span>"
 		
 		parts.push(value)
+
 	return parts.join('')
 
 
@@ -95,6 +148,7 @@ tag outline-part
 			<outline-part data=child owner=data>
 
 tag app-root
+	hlvar = null
 
 	def reselected e\Event
 		console.log 'selected?!',e
@@ -111,10 +165,23 @@ tag app-root
 			let s = token.stack
 			while s
 				let str = s.state.replace(/\.\t*(?=\.|$)/,do(m) ".{m.length - 1}")
-				stack.unshift(str.split('.').slice(0,2).join('.'))
+				# stack.unshift(str.split('.').slice(0,2).join('.'))
+				stack.unshift(str)
 				s = s.parent
 
 			console.log stack.join(" -> ")
+	
+	def pointerover e
+		let vref = null
+		if let el = e.target.closest('.vref')
+			vref = el.className.split(/\s+/g).find do (/var\d+/).test($1)
+		
+		if vref != hlvar
+			if hlvar
+				el.classList.remove('highlight') for el in getElementsByClassName(hlvar)
+			if vref
+				el.classList.add('highlight') for el in getElementsByClassName(vref)
+			hlvar = vref
 
 	def sendCustom
 		let o = {detail: {one: 1}}
@@ -124,11 +191,15 @@ tag app-root
 
 	def handleCustom e
 		console.log 'handle',e
+	
+	def mount
+		render!
+		$code.innerHTML = highlight(doc.getTokens!)
 			
 	def render
-		<self.hbox.grow[ff:sans] :selectstart.reselected :stuff.handleCustom>
+		<self.hbox.grow[ff:sans] @selectstart=reselected  @pointerover=pointerover>
 			# <button :click.sendCustom> "custom!"
-			<pre> <code innerHTML=highlight(doc.getTokens!) contentEditable='true' spellcheck=false>
+			<pre> <code$code contentEditable='true' spellcheck=false>
 			<h2> "Quick outline"
 			<outline-part data=outline>
 			# <pre> <code innerHTML=highlight(original.getTokens!) contentEditable='true' spellcheck=false>
@@ -196,12 +267,14 @@ global css @root
 	.field c:blue3
 	.unit c:red4
 	.type c:purple5
-	.identifier.uppercase c:teal3
-	.identifier.let,.identifier.const,.identifier.param c:yellow3 bg:gray1/10
+	.uppercase c:teal3
+	.decl c:yellow2
 	.style c:purple2 .value:purple4 .property:pink4 .modifier:pink4
 	.selector c:orange3
 	.decorator c:blue5
 
 	.push outline:1px solid green4 d:inline-block
 	.pop outline:1px solid red4 d:inline-block
+	.highlight bg:yellow3/20
+	.scope bg:gray3/2 .l1:clear prefix:'ƒ'
 

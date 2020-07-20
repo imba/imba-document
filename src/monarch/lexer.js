@@ -1,6 +1,9 @@
 import { Token, TokenizationResult } from './token';
 import * as monarchCommon from './common';
 var CACHE_STACK_DEPTH = 5;
+function statePart(state, index) {
+    return state.split('.')[index];
+}
 var MonarchStackElementFactory = (function () {
     function MonarchStackElementFactory(maxCacheDepth) {
         this._maxCacheDepth = maxCacheDepth;
@@ -61,6 +64,23 @@ var MonarchStackElement = (function () {
             return true;
         }
         return false;
+    };
+    Object.defineProperty(MonarchStackElement.prototype, "indent", {
+        get: function () {
+            return this.state.lastIndexOf('\t') - this.state.indexOf('\t');
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(MonarchStackElement.prototype, "scope", {
+        get: function () {
+            return this.part(2);
+        },
+        enumerable: true,
+        configurable: true
+    });
+    MonarchStackElement.prototype.part = function (index) {
+        return this.state.split('.')[index];
     };
     MonarchStackElement.prototype.equals = function (other) {
         return MonarchStackElement._equals(this, other);
@@ -188,6 +208,7 @@ var MonarchTokenizer = (function () {
         var pos = 0;
         var groupMatching = null;
         var forceEvaluation = true;
+        var append = [];
         while (forceEvaluation || pos < lineLength) {
             var pos0 = pos;
             var stackLen0 = stack.depth;
@@ -268,9 +289,6 @@ var MonarchTokenizer = (function () {
                     pos = Math.max(0, pos - action.goBack);
                 }
                 if (action.switchTo && typeof action.switchTo === 'string') {
-                    var indenting = action.switchTo.indexOf('\t') > 0;
-                    if (indenting)
-                        tokensCollector.emit(pos0 + offsetDelta, 'push', stack);
                     var nextState = monarchCommon.substituteMatches(this._lexer, action.switchTo, matched, matches, state);
                     if (nextState[0] === '@') {
                         nextState = nextState.substr(1);
@@ -279,6 +297,14 @@ var MonarchTokenizer = (function () {
                         throw monarchCommon.createError(this._lexer, 'trying to switch to a state \'' + nextState + '\' that is undefined in rule: ' + this._safeRuleName(rule));
                     }
                     else {
+                        var from = stack.scope;
+                        var to = statePart(nextState, 2);
+                        if (from !== to) {
+                            if (stack.parent && stack.parent.scope !== from) {
+                                append.push('pop.' + from);
+                            }
+                            append.push('push.' + to);
+                        }
                         stack = stack.switchTo(nextState);
                     }
                 }
@@ -302,18 +328,13 @@ var MonarchTokenizer = (function () {
                         else {
                             var prev = stack;
                             stack = stack.pop();
-                            var pi0 = prev.state.indexOf('\t');
-                            var pi1 = prev.state.lastIndexOf('\t');
-                            var pi = pi1 - pi0;
-                            var ci0 = stack.state.indexOf('\t');
-                            var ci1 = stack.state.lastIndexOf('\t');
-                            var ci = ci1 - ci0;
-                            if (pi > ci) {
-                                console.log('outdented!!', pi - ci);
-                                tokensCollector.emit(pos0 + offsetDelta, 'pop', stack);
+                            if (prev.indent > stack.indent) {
+                                console.log('outdented!!', prev.indent - stack.indent);
                             }
-                            if (action._pop && false) {
-                                tokensCollector.emit(pos0 + offsetDelta, action._pop, stack);
+                            var from = statePart(prev.state, 2);
+                            var to = statePart(stack.state, 2);
+                            if (from !== to) {
+                                append.push('pop.' + from);
                             }
                         }
                     }
@@ -321,17 +342,17 @@ var MonarchTokenizer = (function () {
                         stack = stack.popall();
                     }
                     else {
-                        var indenting = action.next.indexOf('\t') > 0;
-                        if (indenting)
-                            tokensCollector.emit(pos0 + offsetDelta, 'push', stack);
                         var nextState = monarchCommon.substituteMatches(this._lexer, action.next, matched, matches, state);
                         if (nextState[0] === '@') {
                             nextState = nextState.substr(1);
                         }
+                        var nextScope = statePart(nextState, 2);
                         if (!monarchCommon.findRules(this._lexer, nextState)) {
                             throw monarchCommon.createError(this._lexer, 'trying to set a next state \'' + nextState + '\' that is undefined in rule: ' + this._safeRuleName(rule));
                         }
                         else {
+                            if (nextScope != stack.scope)
+                                append.push('push.' + nextScope);
                             stack = stack.push(nextState);
                         }
                     }
@@ -380,6 +401,9 @@ var MonarchTokenizer = (function () {
                 }
                 if (matched.length === 0) {
                     if (lineLength === 0 || stackLen0 !== stack.depth || state !== stack.state || (!groupMatching ? 0 : groupMatching.groups.length) !== groupLen0) {
+                        while (append.length > 0) {
+                            tokensCollector.emit(pos0 + offsetDelta, append.shift(), stack);
+                        }
                         continue;
                     }
                     else {
@@ -405,6 +429,9 @@ var MonarchTokenizer = (function () {
                     lastToken.value = line.slice(lastToken.offset - offsetDelta, pos0);
                 }
                 lastToken = token;
+                while (append.length > 0) {
+                    tokensCollector.emit(pos0 + offsetDelta, append.shift(), stack);
+                }
             }
         }
         if (lastToken && !lastToken.value) {

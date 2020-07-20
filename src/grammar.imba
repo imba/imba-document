@@ -11,7 +11,7 @@ export var types =
 	decl_def_name: 'entity.name.function'
 
 const repop = { token: '@rematch', next: '@pop',_pop:'pop'}
-const toodeep = {token: 'white.indent',next: '@illegal_indent.$S2\t'}
+const toodeep = {token: 'white.indent',next: '@>illegal_indent'}
 
 def denter indent,outdent,stay
 	if indent == null
@@ -19,6 +19,7 @@ def denter indent,outdent,stay
 
 	elif indent == 1
 		indent = {next: '@$S1.$S2\t.$S3.$S4'}
+		indent = {next: '@>'}
 
 	if outdent == -1
 		outdent = repop
@@ -31,26 +32,16 @@ def denter indent,outdent,stay
 	stay = Object.assign({token: 'white'},stay or {})
 	outdent = Object.assign({ token: '@rematch', next: '@pop'},outdent or {})
 
-	[/^(\t*)(?=[^\t\n@newline])/,{cases: {
-		'$1==$S2\t': indent
-		'$1==$S2': stay
+	[/^\t*(?=[^\t\n@newline])/,{cases: {
+		'$#==$S2\t': indent
+		'$#==$S2': stay
 		'@default': outdent
 	}}]
-
-def identifiers reg,o = {}
-	let c = do Object.assign({},o,$1)
-	[reg,cases: {
-		'this': c(token: 'this')
-		'self': c(token: 'self')
-		'@keywords': c(token: 'keyword.$#')
-		'$1~[A-Z]': c(token: "identifier.uppercase.$S5")
-		'@default': c(token: "identifier.$S5")
-	}]
 
 export var states = {
 
 	root: [
-		['','','@body.']
+		['','','@body&root']
 	]
 
 	illegal_indent: [
@@ -62,18 +53,18 @@ export var states = {
 		[/\$\d+/, 'identifier.special']
 		# [/(@constant)/, 'identifier.constant.$S4']
 		[/@anyIdentifierPre([\?\!]?)/,cases: {
-			'this': 'this',
-			'self': 'self',
-			'@keywords': {token: 'keyword.$#'},
-			'$1~[A-Z].*': {token: 'identifier.uppercase.$S5'}
-			'@default': {token: 'identifier.$S5'}
+			'this': 'this'
+			'self': 'self'
+			'@keywords': 'keyword.$#'
+			'$1~[A-Z].*': 'identifier.uppercase.$F'
+			'@default': 'identifier.$F'
 		}]
 	]
 
 	body: [
 		[/^(\t+)(?=[^\t\n@newline])/,{cases: {
-			'$1==$S2\t': {token: 'white.indent',next: '@illegal_indent.$S2\t', log: "indent!!$S0|"}
-			'@default': { token: 'white.indent' }
+			'$1==$S2\t': {token: 'white.indent',next: '@>illegal_indent'}
+			'@default': 'white.indent'
 		}}]
 		'block_'
 	]
@@ -95,23 +86,22 @@ export var states = {
 	]
 
 	block: [
-		denter('@block.$S2\t.$S3.$S4',-1,0)
+		denter('@>',-1,0)
 		'block_'
 	]
-
 	bool_: [
 		[/(true|false|yes|no|undefined|null)(?![\:\-\w\.\_])/,'boolean']
 	]
 
 	op_: [
 		[/\&(?=[,\)])/,'operator.special.blockparam']
-		[/@symbols/, { cases: {
+		[/@symbols/, cases: {
 			'@operators': 'operator'
 			'@math': 'operator.math'
 			'@logic': 'operator.logic'
 			'@dot': 'operator.dot'
 			'@default': 'delimiter'
-		} }]
+		}]
 		[/\&\b/, 'operator']
 	]
 
@@ -163,17 +153,17 @@ export var states = {
 	]
 
 	call_: [
-		[/\(/, '$#', '@call_body.$S2.$1.$S4']
+		[/\(/, '$#', '@call_body']
 	]
 
 	implicit_call_: [
 		[/(\.)(@anyIdentifier\??)@implicitCall/,cases: {
-			'$2~[A-Z].*': ['operator.dot','access.uppercase','@implicit_call_body.$S2']
-			'@default': ['operator.dot','access','@implicit_call_body.$S2']
+			'$2~[A-Z].*': ['operator.dot','access.uppercase','@implicit_call_body']
+			'@default': ['operator.dot','access','@implicit_call_body']
 		}]
 		[/(@anyIdentifier\??)@implicitCall/,cases: {
-			'$2~[A-Z].*': ['identifier.uppercase.$S5','@implicit_call_body.$S2']
-			'@default': ['identifier.$S5','@implicit_call_body.$S2']
+			'$2~[A-Z].*': ['identifier.uppercase','@implicit_call_body']
+			'@default': ['identifier','@implicit_call_body']
 		}]
 	]
 
@@ -198,20 +188,22 @@ export var states = {
 	]
 
 	params_: [
-		[/\[/, '$#', '@array_body.$S2.param.$S4.param']
-		[/\{/, '$#', '@object_body.$S2.param.$S4.param']
+		# [/\[/, '$#', '@array_body.$S2.param.$S4.param']
+		# [/\{/, '$#', '@object_body.$S2.param.$S4.param']
+		[/\[/, '$#', '@array_body=param']
+		[/\{/, '$#', '@object_body=param']
 		[/(@variable)/,token: 'identifier.param']
 		# [/(\s*\=\s*)(?=(for|while|until|if|unless)\s)/,'operator','@pop']
-		[/(\s*\=\s*)/,'operator','@var_value.$S2.$S3.$S4']
+		[/(\s*\=\s*)/,'operator','@var_value=']
 		[/\s*\,\s*/,'separator']
 	]
 
 	object_: [
-		[/\{/, '$#', '@object_body.$S2.$1.$S4']
+		[/\{/, '$#', '@object_body']
 	]
 
 	parens_: [
-		[/\(/, '$#', '@parens_body.$S2.$1.$S4']
+		[/\(/, '$#', '@parens_body']
 	]
 
 	parens_body: [
@@ -220,11 +212,11 @@ export var states = {
 	]
 
 	array_: [
-		[/\[/, '$#', '@array_body.$S2.$1.$S4']
+		[/\[/, '$#', '@array_body']
 	]
 
 	array_body: [
-		[/\]@implicitCall/, token: '$#', switchTo: '@implicit_call_body.$S2.$1.$S4']
+		[/\]@implicitCall/, token: '$#', switchTo: '@implicit_call_body=']
 		[/\]/, '$#', '@pop']
 		'expr_'
 		[',','delimiter']
@@ -232,11 +224,11 @@ export var states = {
 
 	object_body: [
 		[/\}/, '$#', '@pop']
-		[/(@anyIdentifier)(\s*:\s*)(@anyIdentifier)/, ['identifier.key','operator.assign.key','identifier.key.$S5']]
-		[/(@identifier)/, 'identifier.key.$S5']
-		[/\[/, '$#', '@object_dynamic_key.$S2.$S3.$S4']
-		[/\s*=\s*/,'operator.assign.key','@object_value.$S2.$S3.$S4']
-		[/:/,'operator.assign.key','@object_value.$S2.$S3.$S4']
+		[/(@anyIdentifier)(\s*:\s*)(@anyIdentifier)/, ['identifier.key','operator.assign.key','identifier.key.$F']]
+		[/(@identifier)/, 'identifier.key.$F']
+		[/\[/, '$#', '@object_dynamic_key=']
+		[/\s*=\s*/,'operator.assign.key','@object_value=']
+		[/:/,'operator.assign.key','@object_value=']
 		[/\,/,'delimiter.comma']
 		'expr_'
 	]
@@ -258,7 +250,7 @@ export var states = {
 	]
 
 	block_comment_: [
-		[/###/, 'comment.start','@_block_comment.$S2']
+		[/###/, 'comment.start','@_block_comment']
 	]
 
 	_block_comment: [
@@ -268,31 +260,31 @@ export var states = {
 
 	# add try_start that accepts catch on the same line?
 	try_: [
-		[/try@B/,'keyword.try','@_try.$S2\t']
+		[/try@B/,'keyword.try','@>_try']
 	]
 
 	catch_: [
-		[/(catch)(\s+)(@anyIdentifier)/, ['keyword.$1','white','identifier.const','@_catch.$S2\t']]
-		[/catch@B/,'keyword.catch','@_catch.$S2\t']
+		[/(catch)(\s+)(@anyIdentifier)/, ['keyword.$1','white','identifier.const','@>_catch']]
+		[/catch@B/,'keyword.catch','@>_catch']
 	]
 
 	_catch: [
-		denter('@block.$S2\t.$S3.$S4',-1,0)
+		denter('@>block',-1,0)
 		'block_'
 	]
 
 	_try: [
-		denter('@block.$S2\t.$S3.$S4',-1,0)
+		denter('@>block',-1,0)
 		'block_'
 	]
 
 	do_: [
-		[/(do)(\()/,['keyword.do','$2','@_do_params.$S2\t']]
-		[/do@B/,'keyword.$#','@_do.$S2\t']
+		[/(do)(\()/,['keyword.do','$2','@>_do_params&do']]
+		[/do@B/,'keyword.$#','@>_do&do']
 	]
 
 	_do_params: [
-		[/\)/,'$#',switchTo: '@_do.$S2']
+		[/\)/,'$#',switchTo: '@_do']
 		'params_'
 	]
 
@@ -303,44 +295,45 @@ export var states = {
 
 	class_: [
 		[/(export|extend)(?=\s+class )/,'keyword.$#']
-		[/(class)(\s)(@anyIdentifier)/, ['keyword.$1','white.$1name','const.$1','@class_start.$S2.$1.$S4']]
+		[/(class)(\s)(@anyIdentifier)/, ['keyword.$1','white.$1name','const.$1','@class_start=']]
 	]
 
 	class_start: [
 		[/(\s+\<\s+)(@anyIdentifier)/,['keyword.extends','identifier.superclass']]
 		[/#(\s.+)?$/, 'comment']
-		denter({switchTo: '@_class.$S2\t.$S3.$S4'},-1,-1)
+		[/^/,'@rematch',switchTo: '@>_class&class=']
+		denter({switchTo: '@>_class&class='},-1,-1)
 	]
 
 	tagclass_: [
 		[/(export|extend)(?=\s+tag )/,'keyword.$#']
-		[/(tag)(\s)(@anyIdentifier)/, ['keyword.tag','white.tagname','const.$1','@tagclass_start.$S2.$1.$S4']]
+		[/(tag)(\s)(@anyIdentifier)/, ['keyword.tag','white.tagname','const.$1','@tagclass_start=']]
 	]
 
 	tagclass_start: [
 		[/(\s+\<\s+)(@anyIdentifier)/,['keyword.extends','identifier.superclass']]
 		[/#(\s.+)?$/, 'comment']
-		denter({switchTo: '@_tagclass.$S2\t.$S3.$S4'},-1,-1)
+		[/^/,'@rematch',switchTo: '@>_tagclass&tag=']
+		denter({switchTo: '@>_tagclass&tag='},-1,-1)
 	]
 
 	import_: [
-		[/(import)(?=\s+['"])/,'keyword.import','@import_source.$S2.$1']
-		[/(import|export)@B/,'keyword.import','@import_body.$S2.$1']
+		[/(import)(?=\s+['"])/,'keyword.import','@import_source']
+		[/(import|export)@B/,'keyword.import','@import_body']
 	]
 
 	import_body: [
-		eolpop # use denter
 		[/(\*)(\s+as\s+)(@esmIdentifier)/, ['keyword.star','keyword.as','identifier.const.import']]
 		[/(@esmIdentifier)(\s+as\s+)(@esmIdentifier)/, ['alias','keyword.as','identifier.const.import']]
-		[/from/, 'keyword.from',switchTo: '@import_source.$S2']
-		[/\{/,'imports.open','@esm_specifiers.$S2.imports']
+		[/from/, 'keyword.from',switchTo: '@import_source']
+		[/\{/,'imports.open','@esm_specifiers/imports']
 		[/(@esmIdentifier)/,'identifier.const.import']
 	]
 
 	esm_specifiers: [
 		[/\}/, '$S2.close', '@pop']
-		[/(@esmIdentifier)(\s+as\s+)(@esmIdentifier)/, ['alias','keyword.as',{token: 'identifier.const.import'}]]
-		[/(@esmIdentifier)/, token: 'identifier.const.$S2']
+		[/(@esmIdentifier)(\s+as\s+)(@esmIdentifier)/, ['alias','keyword.as','identifier.const.import']]
+		[/(@esmIdentifier)/, 'identifier.const.$/']
 		[/\s*\,\s*/,'delimiter.comma']
 	]
 
@@ -351,44 +344,49 @@ export var states = {
 
 	css_: [
 		[/global(?=\s+css )/,'keyword.$#']
-		[/(css)@B/, ['keyword.$1','@_css.$S2\t.$1.$S4']]
+		[/(css)@B/, ['keyword.$1','@>_css']]
 	]
 
 	css_start: [
-		denter({switchTo: '@_css.$S2\t.$S3.$S4'},-1,-1)
+		denter({switchTo: '@>_css'},-1,-1)
 	]
 
 	_css: [
 		denter(null,-1,0)
 		[/\s+/,'white']
-		[/(?=@cssPropertyKey)/,token:'',next:'@css_property.$S2']
-		[/(?=[\%\*\w\&\$\>\.\[\@\!]|\#[\w\-])/,token:'',next:'@css_selector.$S2']
+		[/(?=@cssPropertyKey)/,'','@css_property']
+		[/(?=[\%\*\w\&\$\>\.\[\@\!]|\#[\w\-])/,'','@css_selector']
 		[/#(\s.+)?$/, 'comment']
 		'expr_'
 	]
 
 	css_inline: [
 		[/\]/,'style.close','@pop']
-		[/(?=@cssPropertyKey)/,token:'',next:'@css_property.$S2']
+		[/(?=@cssPropertyKey)/,'','@css_property']
 	]
 	
 	def_: [
 		[/static(?=\s+(get|set|def) )/,'keyword.$#']
-		[/(def|get|set)(\s)(@anyIdentifier)/, ['keyword.$1','white','entity.$$','@$1_params.$S2.$1.$S4']]
-		[/(def|get|set)(\s)(\[)/, ['keyword.$1','white','$$','@def_dynamic_name.$S2.$1.$S4']]
+		[/(def|get|set)(\s)(@anyIdentifier)/, ['keyword.$1','white','entity.$$','@def_params&$1/$1']]
+		[/(def|get|set)(\s)(\[)/, ['keyword.$1','white','$$','@def_dynamic_name/$1']]
 	]
 	
 	flow_: [
 		# [/(else)(?=\s|$)/, ['keyword.$1','@flow_start.$S2.flow.$S4']]
-		[/(if|else|elif|unless)(?=\s|$|@newline)/, ['keyword.$1','@flow_start.$S2.flow.$S4']]
+		[/(if|else|elif|unless)(?=\s|$|@newline)/, ['keyword.$1','@flow_start&$1']]
+	]
+
+	flow_start: [
+		denter({switchTo: '@>_flow'},-1,-1)
+		'expr_'
 	]
 
 	for_: [
-		[/for@B/,'keyword.$#','@for_start.$S2.let']
+		[/for@B/,'keyword.$#','@for_start&flow=let']
 	]
 
 	while_: [
-		[/(while|until)@B/,'keyword.$#','@while_body.$S2\t']
+		[/(while|until)@B/,'keyword.$#','@>while_body']
 	]
 	while_body: [
 		denter(null,-1,0)
@@ -396,15 +394,15 @@ export var states = {
 	]
 
 	for_start: [
-		denter({switchTo: '@for_body.$S2\t..$S4'},-1,-1)
-		[/\[/, '$#', '@array_body.$S2.$1.$S4.$S3']
-		[/\{/, '$#', '@object_body.$S2.$1.$S4.$S3']
-		[/(@variable)/,token: 'identifier.$S3']
-		[/(\s*\,\s*)/,token: 'separator']
-		[/\s(in|of)@B/,'keyword',switchTo: '@for_source.$S2..$S4']
+		denter({switchTo: '@>for_body'},-1,-1)
+		[/\[/, '$#', '@array_body']
+		[/\{/, '$#', '@object_body']
+		[/(@variable)/,'identifier.$F']
+		[/(\s*\,\s*)/,'separator']
+		[/\s(in|of)@B/,'keyword',switchTo: '@for_source=']
 	]
 	for_source: [
-		denter({switchTo: '@for_body.$S2\t.$S3.$S4'},-1,-1)
+		denter({switchTo: '@>for_body'},-1,-1)
 		'expr_'
 	]
 
@@ -414,7 +412,7 @@ export var states = {
 	]
 
 	decorator_: [
-		[/(\@@anyIdentifier)(\()/,['decorator','$2','@_decorator_params.$S2']]
+		[/(\@@anyIdentifier)(\()/,['decorator','$2','@_decorator_params']]
 		[/(\@@anyIdentifier)/,'decorator']
 	]
 
@@ -426,13 +424,13 @@ export var states = {
 	field_: [
 		[/static(?=\s+@anyIdentifier)/,'keyword.static']
 		[/(@anyIdentifier\??)(?=@newline|$)/,'field']
-		[/(@anyIdentifier\??)/,['field','@_field_1.$S2.0']]
+		[/(@anyIdentifier\??)/,['field','@_field_1']]
 	]
 
 	_field_1: [
 		denter(null,-1,-1)
 		'type_'
-		[/(\s*=\s*)/,['operator.assign','@_field_value.$S2\t.0']]
+		[/(\s*=\s*)/,['operator.assign','@>_field_value']]
 	]
 
 	_field_value: [
@@ -441,19 +439,20 @@ export var states = {
 	]
 
 	var_: [
-		[/((?:export )?)(const|let)(?=\s|$)/, ['keyword.export','keyword.$1','@$2_body.$S2.$2.$S4']]
+		[/((?:export )?)(const|let)(?=\s|$)/, ['keyword.export','keyword.$1','@_varblock=$2']] # $2_body.$S2.$2.$S4
 	]
 
 	inline_var_: [
-		[/(const|let)(?=\s|$)/, ['keyword.$1','@inline_var_body.$S2.$1.$S4']]
+		[/(const|let)(?=\s|$)/, ['keyword.$1','@inline_var_body=$1']]
 	]
 
 	string_: [
-		[/"""/, 'string', '@_herestring.$S2."""']
-		[/'''/, 'string', '@_herestring.$S2.\'\'\'']
-		[/"/, 'string.open','@_string.$S2.".$S4']
-		[/'/, 'string.open','@_string.$S2.\'.$S4']
-		[/\`/,'string.open','@_string.$S2.\`.$S4']
+		[/"""/, 'string', '@_herestring="""']
+		[/'''/, 'string', '@_herestring=\'\'\'']
+		# [/"/, 'string.open','@_string.$S2.".$S4']
+		# [/'/, 'string.open','@_string.$S2.\'.$S4']
+		# [/\`/,'string.open','@_string.$S2.\`.$S4']
+		[/["'`]/, 'string.open','@_string=$#']
 	]
 
 	number_: [
@@ -474,10 +473,10 @@ export var states = {
 		[/@escapes/, 'string.escape']
 		[/\./, 'string.escape.invalid']
 		[/\{/, cases: {
-			'$S3==\'': 'string'
-			'@default': { token: 'string.bracket.open', next: '@interpolation_body.$S2.$S3.$S4' }
+			'$F==\'': 'string'
+			'@default': { token: 'string.bracket.open', next: '@interpolation_body' }
 		}]
-		[/["'`]/, { cases: { '$#==$S3': { token: 'string.close', next: '@pop' }, '@default': 'string' } }]
+		[/["'`]/, cases: { '$#==$F': { token: 'string.close', next: '@pop' }, '@default': 'string' }]
 		[/#/, 'string']
 	]
 
@@ -487,7 +486,7 @@ export var states = {
 		[/['"]+/, 'string'],
 		[/@escapes/, 'string.escape'],
 		[/\./, 'string.escape.invalid'],
-		[/\{/, { cases: { '$S2=="""': { token: 'string', next: '@interpolation_body.$S2.$S3.$S4' }, '@default': 'string' } }],
+		[/\{/, { cases: { '$S2=="""': { token: 'string', next: '@interpolation_body' }, '@default': 'string' } }],
 		[/#/, 'string']
 	]
 
@@ -513,18 +512,17 @@ export var states = {
 	]
 
 	def_params: [
-		denter({switchTo: '@_$S3.$S2\t.$S3.$S4'},-1,-1)
-		[/\[/, '$#', '@array_body.$S2.param.$S4.param']
-		[/\{/, '$#', '@object_body.$S2.param.$S4.param']
-		[/(@variable)/,token: 'identifier.param']
+		denter({switchTo: '@>_def'},-1,-1)
+		[/\[/, '$#', '@array_body=param']
+		[/\{/, '$#', '@object_body=param']
+		[/(@variable)/,'identifier.param']
 		'spread_'
-		# [/(\s*\=\s*)(?=(for|while|until|if|unless)\s)/,'operator','@pop']
-		[/(\s*\=\s*)/,'operator','@var_value.$S2.$S3.$S4']
+		[/(\s*\=\s*)/,'operator','@var_value=']
 		[/\s*\,\s*/,'separator']
 	]
 
 	def_dynamic_name: [
-		[']',token: 'square.close',switchTo: '@$S3_params.$S2.$S3.$S4']
+		[']',token: 'square.close',switchTo: '@def_params&$/']
 		'expr_'
 	]
 
@@ -533,59 +531,33 @@ export var states = {
 		'block_'
 	]
 
-	get_params: [
-		'def_params'
-	]
+	
 
-	_get: [
-		[/(one)/,'keyword']
-		'_def'
-	]
-
-	set_params: [
-		'def_params'
-	]
-
-	_set: [
-		'_def'
-	]
-
-	flow_start: [
-		denter({switchTo: '@$S3_body.$S2\t.$S3.$S4'},-1,-1)
-		'expr_'
-	]
-
-	flow_body: [
+	_flow: [
 		denter(toodeep,-1,0)
 		'block_'
 	]
 
-	var_body: [
+	_varblock: [
 		denter(1,-1,-1)
-		[/\[/, '$#', '@array_body.$S2.$1.$S4.$S3']
-		[/\{/, '$#', '@object_body.$S2.$1.$S4.$S3']
-		[/(@variable)/,token: 'identifier.$S3']
-		[/(\s*\,\s*)/,token: 'separator']
+		[/\[/, '$#', '@array_body']
+		[/\{/, '$#', '@object_body']
+		[/(@variable)/,'identifier.$F']
+		[/(\s*\,\s*)/,'separator']
 		[/(\s*\=\s*)(?=(for|while|until|if|unless)\s)/,'operator','@pop']
-		[/(\s*\=\s*)/,'operator','@var_value.$S2.$S3.$S4']
-		# [/(\s+)(?=\w\[\'\"])/,'white','@pop']
+		[/(\s*\=\s*)/,'operator','@var_value=']
 	]
 
 	inline_var_body: [
-		[/\[/, '$#', '@array_body.$S2.$1.$S4.$S3']
-		[/\{/, '$#', '@object_body.$S2.$1.$S4.$S3']
-		[/(@variable)/,token: 'identifier.$S3']
-		[/(\s*\=\s*)/,'operator',switchTo: '@var_value.$S2.$S3.$S4']
+		[/\[/, '$#', '@array_body']
+		[/\{/, '$#', '@object_body']
+		[/(@variable)/,'identifier.$F']
+		[/(\s*\=\s*)/,'operator',switchTo: '@var_value=ident']
 	]
-
-	const_body: ['var_body']
-	let_body: ['var_body']
 
 	var_value: [
 		[/(?=,|\))/, 'delimiter', '@pop']
-		# eolpop
-		# [/(?=,|@newline|\))/, 'delimiter', '@pop']
-		denter({switchTo: '@block.$S2\t.$S3.$S4'},-1,-1)
+		denter({switchTo: '@>block'},-1,-1)
 		# denter({switchTo: 1},-1,-1)
 		'expr_'
 	]
@@ -599,24 +571,24 @@ export var states = {
 	]
 
 	type_: [
-		[/\\/, 'type.start','@_type.$S2.0']
+		[/\\/, 'type.start','@_type/0']
 	]
 
 	_type: [
 		denter(null,-1,-1)
-		[/\[/,'type.$#','@_type.$S2.]']
-		[/\(/,'type','@_type.$S2.)']
-		[/\{/,'type','@_type.$S2.}']
-		[/\</,'type','@_type.$S2.>']
+		[/\[/,'type.$#','@/]']
+		[/\(/,'type','@/)']
+		[/\{/,'type','@/}']
+		[/\</,'type','@/>']
 		[/\,|\s/,{
 			cases: {
-				'$S3==0': { token: '@rematch', next: '@pop' }
+				'$/==0': { token: '@rematch', next: '@pop' }
 				'@default': 'type'
 			}
 		}]
 		[/[\]\}\)\>]/,{
 			cases: {
-				'$#==$S3': { token: 'type', next: '@pop' }
+				'$#==$/': { token: 'type', next: '@pop' }
 				'@default': { token: '@rematch', next: '@pop' }
 			}
 		}]
@@ -624,8 +596,8 @@ export var states = {
 	]
 
 	css_selector: [
-		[/(\}|\)|\])/, {token: '@rematch', next: '@pop'}],
-		[/@cssPropertyKey/,token: '@rematch',next:'@pop']
+		[/(\}|\)|\])/,'@rematch', '@pop'],
+		[/@cssPropertyKey/,'@rematch','@pop']
 		[/(\%)((?:@anyIdentifier)?)/,['style.selector.mixin.prefix','style.selector.mixin']]
 		[/(\@)(\.{0,2}[\w\-]*)/,['style.selector.modifier.prefix','style.selector.modifier']]
 		[/\.([\w\-]+)/,'style.selector.class-name']
@@ -635,12 +607,12 @@ export var states = {
 		[/(\*+)/,'style.selector.element.any']
 		[/(\$)((?:@anyIdentifier)?)/,['style.selector.reference.prefix','style.selector.reference']]
 		[/\&/,'style.selector.context']
-		[/\(/,'delimiter.selector.parens.open','@css_selector_parens.$S2.)']
-		[/\[/,'delimiter.selector.attr.open','@css_selector_attr.$S2.]']
+		[/\(/,'delimiter.selector.parens.open','@css_selector_parens']
+		[/\[/,'delimiter.selector.attr.open','@css_selector_attr']
 		[/\s+/,'white']
 		[/,/,'style.selector.delimiter']
 		[/#(\s.+)?$/, 'comment']
-		[/^/, token: '@rematch', next: '@pop']
+		[/^/, '@rematch', '@pop']
 	]
 	css_selector_parens: [
 		[/\)/, 'delimiter.selector.parens.close','@pop']
@@ -658,7 +630,7 @@ export var states = {
 		[/(-*@anyIdentifier)/, 'style.property.name']
 		[/(\@+|\.+)(@anyIdentifier\-?)/, ['style.property.modifier.start','style.property.modifier']]
 		[/\+(@anyIdentifier)/, 'style.property.scope']
-		[/\s*([\:]\s*)/, token: 'style.property.operator',switchTo: '@css_value.$S2.$S3.$S4']
+		[/\s*([\:]\s*)/, 'style.property.operator',switchTo: '@css_value']
 	]
 
 	css_value_: [
@@ -671,16 +643,16 @@ export var states = {
 		'number_'
 		'comment_'
 		[/\s+/,'style.value.white']
-		[/\(/, token: 'delimiter.style.parens.open', next: '@css_expressions.$S2.)']
-		[/\{/, token: 'delimiter.style.curly.open', next: '@css_interpolation.$S2.}']
+		[/\(/, 'delimiter.style.parens.open', '@css_expressions']
+		[/\{/, 'delimiter.style.curly.open', '@css_interpolation']
 		[/(@anyIdentifier)/, 'style.value']
 	]
 
 	css_value: [
-		denter({switchTo: '@css_multiline_value.$S2\t.$S3.$S4'},-1,-1)
-		[/@cssPropertyKey/, token: '@rematch', next: '@pop']
-		[/;/, token: 'style.delimiter', next: '@pop']
-		[/(\}|\)|\])/, {token: '@rematch', next: '@pop'}]
+		denter({switchTo: '@>css_multiline_value'},-1,-1)
+		[/@cssPropertyKey/, '@rematch', '@pop']
+		[/;/, 'style.delimiter', '@pop']
+		[/(\}|\)|\])/, '@rematch', '@pop']
 		'css_value_'
 	]
 
@@ -691,14 +663,13 @@ export var states = {
 	]
 
 	css_expressions: [
-		[/\)/, token: 'delimiter.style.parens.close', next: '@pop']
-		[/\(/, token: 'delimiter.style.parens.open', next: '@css_expressions.$S2.)']
+		[/\)/, 'delimiter.style.parens.close', '@pop']
+		[/\(/, 'delimiter.style.parens.open', '@css_expressions']
 		'css_value'
-		# {include: '@css_value'}
 	]
 
 	css_interpolation: [
-		[/\}/, token: 'delimiter.style.curly.close', next: '@pop']
+		[/\}/, 'delimiter.style.curly.close', '@pop']
 		'expr_'
 	]
 
@@ -711,9 +682,8 @@ export var states = {
 	]
 
 	tag_: [
-		[/(<)(?=\.)/, 'tag.open','@_tag.$S2.flag'],
-		[/(<)(?=\.)/, 'tag.open','@_tag.$S2.flag'],
-		[/(<)(?=\w|\{|\[|\%|\#|>)/,'tag.open','@_tag.$S2.name']
+		[/(<)(?=\.)/, 'tag.open','@_tag=flag'],
+		[/(<)(?=\w|\{|\[|\%|\#|>)/,'tag.open','@_tag=name']
 	]
 	tag_content: [
 		denter(null,-1,0)
@@ -728,47 +698,47 @@ export var states = {
 	_tag: [
 		
 		[/\/>/,'tag.close','@pop']
-		[/>/,'tag.close',switchTo: '@tag_content.$S2\t..$S4']
-		[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,'tag.$S3.$#']
+		[/>/,'tag.close',switchTo: '@>tag_content=']
+		[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,'tag.$/.$#']
 		[/(\-?\d+)/,'tag.$S3']
 		[/(\%)(@anyIdentifier)/,['tag.mixin.prefix','tag.mixin']]
 		[/(\#)(@anyIdentifier)/,['tag.id.prefix','tag.id']]
 
 		[/\./,{ cases: {
-			'$S3==event': {token: 'tag.event-modifier.start', switchTo: '@_tag.$S2.event-modifier'}
-			'$S3==event-modifier': {token: 'tag.event-modifier.start', switchTo: '@_tag.$S2.event-modifier'}
-			'$S3==modifier': {token: 'tag.modifier.start', switchTo: '@_tag.$S2.modifier'}
-			'$S3==rule': {token: 'tag.rule-modifier.start', switchTo: '@_tag.$S2.rule-modifier'}
-			'$S3==rule-modifier': {token: 'tag.rule-modifier.start', switchTo: '@_tag.$S2.rule-modifier'}
-			'@default': {token: 'tag.flag.start', switchTo: '@_tag.$S2.flag'}
+			'$/==event': {token: 'tag.event-modifier.start', switchTo: '@/event-modifier'}
+			'$/==event-modifier': {token: 'tag.event-modifier.start', switchTo: '@/event-modifier'}
+			'$/==modifier': {token: 'tag.modifier.start', switchTo: '@/modifier'}
+			'$/==rule': {token: 'tag.rule-modifier.start', switchTo: '@/rule-modifier'}
+			'$/==rule-modifier': {token: 'tag.rule-modifier.start', switchTo: '@/rule-modifier'}
+			'@default': {token: 'tag.flag.start', switchTo: '@/flag'}
 		}}]
 
 		[/(\$?@anyIdentifier)/,{ cases: {
-			'$S3==name': {token: 'tag.reference'}
-			'@default': {token: 'tag.$S3'}
+			'$S3==name': 'tag.reference'
+			'@default': 'tag.$/'
 		}}]
 
-		[/\{/,'tag.$S3.braces.open', '@_tag_interpolation.$S2.$S3']
-		[/\[/,'style.open', '@css_inline.$S2.]']
-		[/(\s*\=\s*)/,'tag.operator.equals', '@_tag_value.$S2.$S3']
-		[/\:/,token: 'tag.event.start', switchTo: '@_tag.$S2.event']
-		[/\@/,token: 'tag.event.start', switchTo: '@_tag.$S2.event']
-		[/\{/,token: 'tag.$S3.braces.open', next: '@_tag_interpolation.$S2.$S3']
-		[/\(/,token: 'tag.parens.open.$S3', next: '@_tag_parens.$S2.$S3']
-		[/\s+/,token: 'white', switchTo: '@_tag.$S2.attr']
+		[/\{/,'tag.$/.braces.open', '@_tag_interpolation']
+		[/\[/,'style.open', '@css_inline']
+		[/(\s*\=\s*)/,'tag.operator.equals', '@_tag_value']
+		[/\:/,token: 'tag.event.start', switchTo: '@/event']
+		[/\@/,token: 'tag.event.start', switchTo: '@/event']
+		[/\{/,token: 'tag.$/.braces.open', next: '@_tag_interpolation/0']
+		[/\(/,token: 'tag.parens.open.$/', next: '@_tag_parens/0']
+		[/\s+/,token: 'white', switchTo: '@/attr']
 		'comment_'
 	]
 	
 	_tag_interpolation: [
-		[/\}/,'tag.$S3.braces.close','@pop']
+		[/\}/,'tag.$/.braces.close','@pop']
 		'expr_'
 		[/\)|\]/,'invalid']
 	]
 
 	_tag_parens: [
-		[/\)/,'tag.parens.close.$S3', '@pop']
+		[/\)/,'tag.parens.close.$/', '@pop']
 		'arglist_'
-		[/\]|\}/,token: 'invalid']
+		[/\]|\}/,'invalid']
 	]
 
 	_tag_value: [
@@ -777,13 +747,13 @@ export var states = {
 	]
 
 	regexp_: [
-		[/\/(?!\ )(?=([^\\\/]|\\.)+\/)/, { token: 'regexp.slash.open', bracket: '@open', next: '@_regexp.$S2'}]
-		[/\/\/\//, { token: 'regexp.slash.open', bracket: '@open', next: '@_hereregexp.$S2'}]
+		[/\/(?!\ )(?=([^\\\/]|\\.)+\/)/, { token: 'regexp.slash.open', bracket: '@open', next: '@_regexp'}]
+		[/\/\/\//, { token: 'regexp.slash.open', bracket: '@open', next: '@_hereregexp'}]
 	]
 	
 	_regexp: [
 		[/(\{)(\d+(?:,\d*)?)(\})/, ['regexp.escape.control', 'regexp.escape.control', 'regexp.escape.control'] ],
-		[/(\[)(\^?)(?=(?:[^\]\\\/]|\\.)+)/, ['regexp.escape.control',{ token: 'regexp.escape.control', next: '@_regexrange.$S2'}]],
+		[/(\[)(\^?)(?=(?:[^\]\\\/]|\\.)+)/, ['regexp.escape.control',{ token: 'regexp.escape.control', next: '@_regexrange'}]],
 		[/(\()(\?:|\?=|\?!)/, ['regexp.escape.control','regexp.escape.control'] ],
 		[/[()]/,        'regexp.escape.control'],
 		[/@regexpctl/,  'regexp.escape.control'],
@@ -808,18 +778,19 @@ export var states = {
 		[/[^\\\/#]/, 'regexp'],
 		[/\\./, 'regexp'],
 		[/#.*$/, 'comment'],
-		['///[igm]*', { token: 'regexp', next: '@pop' }],
+		['///[igm]*','regexp', '@pop' ],
 		[/\//, 'regexp'],
 	]
 }
 
 # states are structured:
 # 1 = the monarch state
-# 2 = the current indentation
-# 3 = the current scope name/type
-# 4 = the monarch substate -- for identifiers++
-# 5 = various flags
+# 2 = the current indentation (I)
+# 3 = the current scope name/type (&)
+# 4 = various flags (F)
+# 5 = the monarch substate -- for identifiers++
 def rewrite-state raw
+	
 	let state = ['$S1','$S2','$S3','$S4','$S5']
 
 	if raw.match(/\@(pop|push|popall)/)
@@ -827,8 +798,13 @@ def rewrite-state raw
 
 	raw = raw.slice(1) if raw[0] == '@'
 
-	if raw.match(/^[\w\$\.\-]+$/)
+	if raw.indexOf('.') >= 0
+		console.log 'return raw state',raw
 		return raw
+
+	raw = rewrite-token(raw)
+	# if raw.match(/^[\w\$\.\-]+$/)
+	#	return raw
 
 	if raw[0] == '>'
 		state[1] = '$S2\t'
@@ -838,7 +814,7 @@ def rewrite-state raw
 		if part[0] == '&'
 			state[2] = part.slice(1)
 		elif part[0] == '+'
-			state[3] = '$S3-' + part.slice(1)
+			state[3] = '$S4-' + part.slice(1)
 		elif part[0] == '='
 			state[3] = part.slice(1)
 		elif part[0] == '/'
@@ -847,12 +823,19 @@ def rewrite-state raw
 			state[0] = part
 	return state.join('.')
 
-console.log rewrite-state('+let')
-console.log rewrite-state('>+let&class')
+def rewrite-token raw
+	let orig = raw
+	raw = raw.replace('$F','$S4')
+	raw = raw.replace('$&','$S3')
+	raw = raw.replace('$I','$S2')
+	raw = raw.replace('$/','$S5')
+	# if orig != raw
+	#	console.log 'rewriting token',orig,raw
+	return raw
 
 def rewrite-actions actions,add
 	if typeof actions == 'string' # and parts.indexOf('$') >= 0
-		actions = {token: actions}
+		actions = {token: rewrite-token(actions)}
 
 	if actions and actions.token != undefined
 		if typeof add == 'string'
@@ -867,8 +850,11 @@ def rewrite-actions actions,add
 
 	elif actions and actions.cases
 		# console.log 'found cases to transform!!'
+		let cases = {}
 		for own k,v of actions.cases
-			actions.cases[k] = rewrite-actions(v,actions.cases)
+			let newkey = rewrite-token(k)
+			cases[newkey] = rewrite-actions(v)
+		actions.cases = cases
 
 	elif actions isa Array
 		let result = []
@@ -883,7 +869,7 @@ def rewrite-actions actions,add
 				else
 					Object.assign(curr,action)
 			elif typeof action == 'string'
-				result.push(curr = {token: action})
+				result.push(curr = {token: rewrite-token(action)})
 		actions = result
 
 	if actions isa Array
