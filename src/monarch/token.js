@@ -8,7 +8,7 @@ var Token = (function () {
         this.stack = null;
     }
     Token.prototype.toString = function () {
-        return this.value || ''; // '(' + this.offset + ', ' + this.type + ')';
+        return this.value || '';
     };
     Token.prototype.match = function (val) {
         if (typeof val == 'string') {

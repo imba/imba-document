@@ -287,6 +287,15 @@ function compileAction(lexer: monarchCommon.ILexerMin, ruleName: string, action:
 			if (typeof (action.log) === 'string') {
 				newAction.log = action.log;
 			}
+			if (typeof (action._push) === 'string') {
+				newAction._push = action._push;
+			}
+			if (typeof (action._pop) === 'string') {
+				newAction._pop = action._pop;
+			}
+			if (typeof (action.fn) === 'string') {
+				newAction.fn = action.fn;
+			}
 			if (typeof (action.nextEmbedded) === 'string') {
 				newAction.nextEmbedded = action.nextEmbedded;
 				lexer.usesEmbedded = true;

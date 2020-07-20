@@ -88,6 +88,9 @@ export interface IAction {
 	switchTo?: string;
 	goBack?: number;
 	transform?: (states: string[]) => string[];
+	_push?:string
+	_pop?:string
+	fn?:Function
 }
 
 export interface IBranch {

@@ -268,6 +268,9 @@ var MonarchTokenizer = (function () {
                     pos = Math.max(0, pos - action.goBack);
                 }
                 if (action.switchTo && typeof action.switchTo === 'string') {
+                    var indenting = action.switchTo.indexOf('\t') > 0;
+                    if (indenting)
+                        tokensCollector.emit(pos0 + offsetDelta, 'push', stack);
                     var nextState = monarchCommon.substituteMatches(this._lexer, action.switchTo, matched, matches, state);
                     if (nextState[0] === '@') {
                         nextState = nextState.substr(1);
@@ -297,13 +300,30 @@ var MonarchTokenizer = (function () {
                             throw monarchCommon.createError(this._lexer, 'trying to pop an empty stack in rule: ' + this._safeRuleName(rule));
                         }
                         else {
+                            var prev = stack;
                             stack = stack.pop();
+                            var pi0 = prev.state.indexOf('\t');
+                            var pi1 = prev.state.lastIndexOf('\t');
+                            var pi = pi1 - pi0;
+                            var ci0 = stack.state.indexOf('\t');
+                            var ci1 = stack.state.lastIndexOf('\t');
+                            var ci = ci1 - ci0;
+                            if (pi > ci) {
+                                console.log('outdented!!', pi - ci);
+                                tokensCollector.emit(pos0 + offsetDelta, 'pop', stack);
+                            }
+                            if (action._pop && false) {
+                                tokensCollector.emit(pos0 + offsetDelta, action._pop, stack);
+                            }
                         }
                     }
                     else if (action.next === '@popall') {
                         stack = stack.popall();
                     }
                     else {
+                        var indenting = action.next.indexOf('\t') > 0;
+                        if (indenting)
+                            tokensCollector.emit(pos0 + offsetDelta, 'push', stack);
                         var nextState = monarchCommon.substituteMatches(this._lexer, action.next, matched, matches, state);
                         if (nextState[0] === '@') {
                             nextState = nextState.substr(1);

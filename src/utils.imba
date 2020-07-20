@@ -59,3 +59,72 @@ export def editIsFull e
 
 export def editIsIncremental e
 	return !editIsFull(e) && (e.rangeLength === undefined or typeof e.rangeLength === 'number')
+
+
+export def fastExtractSymbols text
+	let lines = text.split(/\n/)
+	let symbols = []
+	let scope = {indent: -1,children: []}
+	let root = scope
+	# symbols.root = scope
+	let m
+
+	for line,i in lines
+		if line.match(/^\s*$/)
+			continue
+
+		let indent = line.match(/^\t*/)[0].length
+
+		while scope.indent >= indent
+			scope = scope.parent or root 
+
+		m = line.match(/^(\t*((?:export )?(?:static )?(?:extend )?)(class|tag|def|get|set|prop|attr) )(\@?[\w\-\$\:]+(?:\.[\w\-\$]+)?)/)
+		# m ||= line.match(/^(.*(def|get|set|prop|attr) )([\w\-\$]+)/)
+
+		if m
+			let kind = m[3]
+			let name = m[4]
+			let ns = scope.name ? scope.name + '.' : ''
+			let mods = m[2].trim().split(/\s+/)
+			let md = ''
+
+			let span = {
+				start: {line: i, character: m[1].length}
+				end: {line: i, character: m[0].length}
+			}
+
+			let symbol = {
+				kind: kind
+				ownName: name
+				name: ns + name
+				span: span
+				indent: indent
+				modifiers: mods
+				children: []
+				parent: scope == root ? null : scope
+				type: kind
+				data: {}
+				static: mods.indexOf('static') >= 0
+				extends: mods.indexOf('extend') >= 0
+			}
+
+			if symbol.static
+				symbol.containerName = 'static'
+			
+			symbol.containerName = m[2] + m[3]
+				
+			
+			if kind == 'tag' and m = line.match(/\<\s+([\w\-\$\:]+(?:\.[\w\-\$]+)?)/)
+				symbol.superclass = m[1]
+
+			if scope.type == 'tag'
+				md = "```html\n<{scope.name} {name}>\n```\n"
+				symbol.description = {kind: 'markdown',value: md}
+
+			scope.children.push(symbol)
+			scope = symbol
+
+			symbols.push(symbol)
+	
+	root.all = symbols
+	return root

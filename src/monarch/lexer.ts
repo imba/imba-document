@@ -402,6 +402,9 @@ export class MonarchTokenizer implements ITokenizationSupport {
 				}
 
 				if (action.switchTo && typeof action.switchTo === 'string') {
+					let indenting = action.switchTo.indexOf('\t') > 0;
+					if(indenting) tokensCollector.emit(pos0 + offsetDelta, 'push', stack);
+
 					let nextState = monarchCommon.substituteMatches(this._lexer, action.switchTo, matched, matches, state);  // switch state without a push...
 					if (nextState[0] === '@') {
 						nextState = nextState.substr(1); // peel off starting '@'
@@ -425,11 +428,32 @@ export class MonarchTokenizer implements ITokenizationSupport {
 						if (stack.depth <= 1) {
 							throw monarchCommon.createError(this._lexer, 'trying to pop an empty stack in rule: ' + this._safeRuleName(rule));
 						} else {
+							let prev = stack;
 							stack = stack.pop()!;
+							let pi0 = prev.state.indexOf('\t');
+							let pi1 = prev.state.lastIndexOf('\t');
+							let pi = pi1 - pi0;
+
+							let ci0 = stack.state.indexOf('\t');
+							let ci1 = stack.state.lastIndexOf('\t');
+							let ci = ci1 - ci0;
+
+							if( pi > ci ){
+								console.log('outdented!!',pi - ci);
+								tokensCollector.emit(pos0 + offsetDelta, 'pop', stack);
+							}
+
+							if(action._pop && false){
+								// console.log(pi1,pi0,ci1,ci0);
+								// console.log('popping empty token!!',prev,stack);
+								tokensCollector.emit(pos0 + offsetDelta, action._pop, stack);
+							}
 						}
 					} else if (action.next === '@popall') {
 						stack = stack.popall();
 					} else {
+						let indenting = action.next.indexOf('\t') > 0;
+						if(indenting) tokensCollector.emit(pos0 + offsetDelta, 'push', stack);
 						let nextState = monarchCommon.substituteMatches(this._lexer, action.next, matched, matches, state);
 						if (nextState[0] === '@') {
 							nextState = nextState.substr(1); // peel off starting '@'
