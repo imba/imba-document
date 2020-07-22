@@ -115,6 +115,10 @@ class MonarchStackElement {
 		return this.part(2);
 	}
 
+	public get detail(): string {
+		return this.part(2);
+	}
+
 	public part(index:number): string {
 		return this.state.split('.')[index]
 	}
@@ -290,6 +294,31 @@ export class MonarchTokenizer implements ITokenizationSupport {
 		return '(unknown)';
 	}
 
+	private _rescope(from:string,to:string,tokens:string[]):void {
+		let a = (from || '').split('-'); // if-body
+		let b = (to || '').split('-'); // if
+
+		if(from == to) return;
+
+		let diff = 1;
+		// find out their common base
+		while(a[diff] && a[diff] == b[diff]) {
+			diff++
+		}
+		// console.log(`rescope ${from} -> ${to}`,a.length,b.length,diff);
+
+		let level = a.length;
+
+		while(level > diff) {
+			// console.log('popping',a[a.length - 1]);
+			tokens.push('pop.'+a[--level]+'.'+level);
+		}
+		while(b.length > diff) {
+			// console.log('pushing',b[diff]);
+			tokens.push('push.'+b[diff++]+'.'+(diff - 1));
+		}
+	}
+
 	private _myTokenize(line: string, lineState: MonarchLineState, offsetDelta: number, tokensCollector: IMonarchTokensCollector): MonarchLineState {
 		tokensCollector.enterMode(offsetDelta, this._modeId);
 
@@ -312,8 +341,15 @@ export class MonarchTokenizer implements ITokenizationSupport {
 		// Evaluate rules at least once for an empty line
 		let forceEvaluation = true;
 		let append:string[] = [];
+		let tries = 0;
 
 		while (forceEvaluation || pos < lineLength) {
+			tries++;
+
+			if(tries > 100){
+				console.log('infinite recursion',stack,tokensCollector);
+				throw 'infinite recursion in tokenizer?';
+			}
 
 			const pos0 = pos;
 			const stackLen0 = stack.depth;
@@ -435,16 +471,8 @@ export class MonarchTokenizer implements ITokenizationSupport {
 					} else {
 						let from = stack.scope;
 						let to = statePart(nextState,2);
-						if(from !== to){
-							if(stack.parent && stack.parent.scope !== from){
-								append.push('pop.'+from)
-								// tokensCollector.emit(pos0 + offsetDelta, 'pop.'+from, stack);
-							}
-							append.push('push.'+to)
-							// tokensCollector.emit(pos0 + offsetDelta, 'push.'+to, stack);
-						}
+						if(from !== to) this._rescope(from,to,append);
 						stack = stack.switchTo(nextState);
-
 					}
 				} else if (action.transform && typeof action.transform === 'function') {
 					throw monarchCommon.createError(this._lexer, 'action.transform not supported');
@@ -462,18 +490,9 @@ export class MonarchTokenizer implements ITokenizationSupport {
 						} else {
 							let prev = stack;
 							stack = stack.pop()!;
-							if( prev.indent > stack.indent ){
-								console.log('outdented!!',prev.indent - stack.indent);
-								// tokensCollector.emit(pos0 + offsetDelta, 'pop', stack);
-							}
-
-							let from = statePart(prev.state,2);
-							let to = statePart(stack.state,2);
-
-							if(from !== to){
-								append.push('pop.'+from)
-								// tokensCollector.emit(pos0 + offsetDelta, 'pop.'+from, stack);
-							}
+							let from = statePart(prev.state,2)
+							let to = statePart(stack.state,2)
+							this._rescope(from,to,append);
 						}
 					} else if (action.next === '@popall') {
 						stack = stack.popall();
@@ -491,7 +510,8 @@ export class MonarchTokenizer implements ITokenizationSupport {
 						if (!monarchCommon.findRules(this._lexer, nextState)) {
 							throw monarchCommon.createError(this._lexer, 'trying to set a next state \'' + nextState + '\' that is undefined in rule: ' + this._safeRuleName(rule));
 						} else {
-							if(nextScope != stack.scope) append.push('push.'+nextScope)
+							
+							if(nextScope != stack.scope) this._rescope(stack.scope || '',nextScope,append);
 							stack = stack.push(nextState);
 						}
 					}
@@ -499,6 +519,10 @@ export class MonarchTokenizer implements ITokenizationSupport {
 
 				if (action.log && typeof (action.log) === 'string') {
 					monarchCommon.log(this._lexer, this._lexer.languageId + ': ' + monarchCommon.substituteMatches(this._lexer, action.log, matched, matches, state));
+				}
+
+				if(action.mark){
+					tokensCollector.emit(pos0 + offsetDelta, action.mark, stack);
 				}
 			}
 
@@ -552,7 +576,8 @@ export class MonarchTokenizer implements ITokenizationSupport {
 				// check progress
 				if (matched.length === 0) {
 					if (lineLength === 0 || stackLen0 !== stack.depth || state !== stack.state || (!groupMatching ? 0 : groupMatching.groups.length) !== groupLen0) {
-						while(append.length > 0){ tokensCollector.emit(pos0 + offsetDelta, append.shift() as string, stack); }
+						if(typeof result == 'string' && result) tokensCollector.emit(pos + offsetDelta, result, stack);
+						while(append.length > 0){ tokensCollector.emit(pos + offsetDelta, append.shift() as string, stack); }
 						continue;
 					} else {
 						throw monarchCommon.createError(this._lexer, 'no progress in tokenizer in rule: ' + this._safeRuleName(rule));
@@ -582,7 +607,7 @@ export class MonarchTokenizer implements ITokenizationSupport {
 				}
 				lastToken = token;
 
-				while(append.length > 0){ tokensCollector.emit(pos0 + offsetDelta, append.shift() as string, stack); }
+				while(append.length > 0){ tokensCollector.emit(pos + offsetDelta, append.shift() as string, stack); }
 			}
 		}
 

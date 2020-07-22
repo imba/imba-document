@@ -88,6 +88,7 @@ export interface IAction {
 	switchTo?: string;
 	goBack?: number;
 	transform?: (states: string[]) => string[];
+	mark?:string
 	_push?:string
 	_pop?:string
 	fn?:Function

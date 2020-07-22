@@ -79,6 +79,13 @@ var MonarchStackElement = (function () {
         enumerable: true,
         configurable: true
     });
+    Object.defineProperty(MonarchStackElement.prototype, "detail", {
+        get: function () {
+            return this.part(2);
+        },
+        enumerable: true,
+        configurable: true
+    });
     MonarchStackElement.prototype.part = function (index) {
         return this.state.split('.')[index];
     };
@@ -200,6 +207,23 @@ var MonarchTokenizer = (function () {
         }
         return '(unknown)';
     };
+    MonarchTokenizer.prototype._rescope = function (from, to, tokens) {
+        var a = (from || '').split('-');
+        var b = (to || '').split('-');
+        if (from == to)
+            return;
+        var diff = 1;
+        while (a[diff] && a[diff] == b[diff]) {
+            diff++;
+        }
+        var level = a.length;
+        while (level > diff) {
+            tokens.push('pop.' + a[--level] + '.' + level);
+        }
+        while (b.length > diff) {
+            tokens.push('push.' + b[diff++] + '.' + (diff - 1));
+        }
+    };
     MonarchTokenizer.prototype._myTokenize = function (line, lineState, offsetDelta, tokensCollector) {
         tokensCollector.enterMode(offsetDelta, this._modeId);
         var lineLength = line.length;
@@ -209,7 +233,13 @@ var MonarchTokenizer = (function () {
         var groupMatching = null;
         var forceEvaluation = true;
         var append = [];
+        var tries = 0;
         while (forceEvaluation || pos < lineLength) {
+            tries++;
+            if (tries > 100) {
+                console.log('infinite recursion', stack, tokensCollector);
+                throw 'infinite recursion in tokenizer?';
+            }
             var pos0 = pos;
             var stackLen0 = stack.depth;
             var groupLen0 = groupMatching ? groupMatching.groups.length : 0;
@@ -299,12 +329,8 @@ var MonarchTokenizer = (function () {
                     else {
                         var from = stack.scope;
                         var to = statePart(nextState, 2);
-                        if (from !== to) {
-                            if (stack.parent && stack.parent.scope !== from) {
-                                append.push('pop.' + from);
-                            }
-                            append.push('push.' + to);
-                        }
+                        if (from !== to)
+                            this._rescope(from, to, append);
                         stack = stack.switchTo(nextState);
                     }
                 }
@@ -328,14 +354,9 @@ var MonarchTokenizer = (function () {
                         else {
                             var prev = stack;
                             stack = stack.pop();
-                            if (prev.indent > stack.indent) {
-                                console.log('outdented!!', prev.indent - stack.indent);
-                            }
                             var from = statePart(prev.state, 2);
                             var to = statePart(stack.state, 2);
-                            if (from !== to) {
-                                append.push('pop.' + from);
-                            }
+                            this._rescope(from, to, append);
                         }
                     }
                     else if (action.next === '@popall') {
@@ -352,13 +373,16 @@ var MonarchTokenizer = (function () {
                         }
                         else {
                             if (nextScope != stack.scope)
-                                append.push('push.' + nextScope);
+                                this._rescope(stack.scope || '', nextScope, append);
                             stack = stack.push(nextState);
                         }
                     }
                 }
                 if (action.log && typeof (action.log) === 'string') {
                     monarchCommon.log(this._lexer, this._lexer.languageId + ': ' + monarchCommon.substituteMatches(this._lexer, action.log, matched, matches, state));
+                }
+                if (action.mark) {
+                    tokensCollector.emit(pos0 + offsetDelta, action.mark, stack);
                 }
             }
             if (result === null) {
@@ -401,8 +425,10 @@ var MonarchTokenizer = (function () {
                 }
                 if (matched.length === 0) {
                     if (lineLength === 0 || stackLen0 !== stack.depth || state !== stack.state || (!groupMatching ? 0 : groupMatching.groups.length) !== groupLen0) {
+                        if (typeof result == 'string' && result)
+                            tokensCollector.emit(pos + offsetDelta, result, stack);
                         while (append.length > 0) {
-                            tokensCollector.emit(pos0 + offsetDelta, append.shift(), stack);
+                            tokensCollector.emit(pos + offsetDelta, append.shift(), stack);
                         }
                         continue;
                     }
@@ -430,7 +456,7 @@ var MonarchTokenizer = (function () {
                 }
                 lastToken = token;
                 while (append.length > 0) {
-                    tokensCollector.emit(pos0 + offsetDelta, append.shift(), stack);
+                    tokensCollector.emit(pos + offsetDelta, append.shift(), stack);
                 }
             }
         }

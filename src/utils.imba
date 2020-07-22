@@ -1,3 +1,17 @@
+export def matchToken token, match
+	let typ = token.type
+	if match isa RegExp
+		return typ.match(match)
+	elif typeof match == 'string'
+		return typ.indexOf(match) == 0 and (!typ[match.length] or typ[match.length] == '.')
+
+export def prevToken start, match
+	let tok = start
+	while tok
+		return tok if matchToken(tok,match)
+		tok = tok.prev
+	return null
+
 export def computeLineOffsets text, isAtLineStart, textOffset
 	if textOffset === undefined
 		textOffset = 0

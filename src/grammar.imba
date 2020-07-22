@@ -1,13 +1,15 @@
 const eolpop = [/^/, token: '@rematch', next: '@pop']
-const repop = { token: '@rematch', next: '@pop',_pop:'pop'}
+const repop = { token: '@rematch', next: '@pop'}
 const toodeep = {token: 'white.indent',next: '@>illegal_indent'}
 
-def denter indent,outdent,stay
+def denter indent,outdent,stay,reg
 	if indent == null
 		indent = toodeep
 
 	elif indent == 1
 		indent = {next: '@>'}
+	elif typeof indent == 'string'
+		indent = {next: indent}
 
 	if outdent == -1
 		outdent = repop
@@ -20,7 +22,8 @@ def denter indent,outdent,stay
 	stay = Object.assign({token: 'white'},stay or {})
 	outdent = Object.assign({ token: '@rematch', next: '@pop'},outdent or {})
 
-	[/^\t*(?=[^\t\n])/,{cases: {
+	reg ||= /^\t*(?=[^\t\n])/
+	[reg,{cases: {
 		'$#==$S2\t': indent
 		'$#==$S2': stay
 		'@default': outdent
@@ -29,7 +32,11 @@ def denter indent,outdent,stay
 export var states = {
 
 	root: [
-		['','','@body&root']
+		[/^(\t+)(?=[^\t\n])/,{cases: {
+			'$1==$S2\t': {token: 'white.indent',next: '@>illegal_indent'}
+			'@default': 'white.indent'
+		}}]
+		'block_'
 	]
 
 	illegal_indent: [
@@ -70,7 +77,9 @@ export var states = {
 		'while_'
 		'css_'
 		'do_'
+		'func_'
 		'expr_'
+		
 	]
 
 	block: [
@@ -122,12 +131,12 @@ export var states = {
 		'number_'
 		'regexp_'
 		'bool_'
+		'parens_'
 		'call_'
 		'access_'
 		'identifier_'
 		'array_'
 		'object_'
-		'parens_'
 		'comment_'
 		'tag_'
 		'op_'
@@ -283,7 +292,7 @@ export var states = {
 
 	class_: [
 		[/(export|extend)(?=\s+class )/,'keyword.$#']
-		[/(class)(\s)(@anyIdentifier)/, ['keyword.$1','white.$1name','const.$1','@class_start=']]
+		[/(class)(\s)(@anyIdentifier)/, ['keyword.$1','white.$1name','entity.$1','@class_start=']]
 	]
 
 	class_start: [
@@ -295,7 +304,8 @@ export var states = {
 
 	tagclass_: [
 		[/(export|extend)(?=\s+tag )/,'keyword.$#']
-		[/(tag)(\s)(@anyIdentifier)/, ['keyword.tag','white.tagname','const.$1','@tagclass_start=']]
+		[/(tag)(\s)(@constant)/, ['keyword.tag','white.tagname','entity.$1.local','@tagclass_start=']] # only when uppercase
+		[/(tag)(\s)(@anyIdentifier)/, ['keyword.tag','white.tagname','entity.tag','@tagclass_start=']] # only when uppercase
 	]
 
 	tagclass_start: [
@@ -327,36 +337,26 @@ export var states = {
 
 	import_source: [
 		denter(null,-1,-1)
-		'string_'
+		[/["']/, 'start.path','@_path=$#']
+	]
+	_path: [
+		[/[^"'\`\{\\]+/, 'path']
+		[/@escapes/, 'path.escape']
+		[/\./, 'path.escape.invalid']
+		[/\{/, 'invalid']
+		[/["'`]/, cases: { '$#==$F': { token: 'end.path', next: '@pop' }, '@default': 'path' }]
 	]
 
-	css_: [
-		[/global(?=\s+css )/,'keyword.$#']
-		[/(css)@B/, ['keyword.$1','@>_css']]
-	]
-
-	css_start: [
-		denter({switchTo: '@>_css'},-1,-1)
-	]
-
-	_css: [
-		denter(null,-1,0)
-		[/\s+/,'white']
-		[/(?=@cssPropertyKey)/,'','@css_property']
-		[/(?=[\%\*\w\&\$\>\.\[\@\!]|\#[\w\-])/,'','@css_selector']
-		[/#(\s.+)?$/, 'comment']
-		'expr_'
-	]
-
-	css_inline: [
-		[/\]/,'style.close','@pop']
-		[/(?=@cssPropertyKey)/,'','@css_property']
-	]
+	
 	
 	def_: [
-		[/static(?=\s+(get|set|def) )/,'keyword.$#']
-		[/(def|get|set)(\s)(@anyIdentifier)/, ['keyword.$1','white','entity.$$','@def_params&$1/$1']]
+		[/static(?=\s+(get|set|def) )/,'keyword.$#'] # only in class and tagclass?
+		[/(def|get|set)(\s)(@anyIdentifier)/, ['keyword.$1','white.entity','entity.$1.$3','@def_params&$1/$1']]
 		[/(def|get|set)(\s)(\[)/, ['keyword.$1','white','$$','@def_dynamic_name/$1']]
+	]
+
+	func_: [
+		[/(def)(\s)(@anyIdentifier)/, ['keyword.$1','white.entity','entity.$1.$3','@def_params&$1/$1']]
 	]
 	
 	flow_: [
@@ -366,6 +366,8 @@ export var states = {
 
 	flow_start: [
 		denter({switchTo: '@>_flow'},-1,-1)
+		# denter({switchTo: '@>_flow&-body'},-1,-1)
+		# denter('@>_flow&block',-1,-1)
 		'expr_'
 	]
 
@@ -437,9 +439,6 @@ export var states = {
 	string_: [
 		[/"""/, 'string', '@_herestring="""']
 		[/'''/, 'string', '@_herestring=\'\'\'']
-		# [/"/, 'string.open','@_string.$S2.".$S4']
-		# [/'/, 'string.open','@_string.$S2.\'.$S4']
-		# [/\`/,'string.open','@_string.$S2.\`.$S4']
 		[/["'`]/, 'string.open','@_string=$#']
 	]
 
@@ -496,7 +495,8 @@ export var states = {
 
 	_tagclass: [
 		'_class'
-		
+		[/(?=\<self)/,'entity.def.render','@>_def&def',]
+		# self def
 	]
 
 	def_params: [
@@ -583,9 +583,12 @@ export var states = {
 		[/[\w\-\$]+/,'type']
 	]
 
-	css_selector: [
-		[/(\}|\)|\])/,'@rematch', '@pop'],
-		[/@cssPropertyKey/,'@rematch','@pop']
+	css_: [
+		[/global(?=\s+css@B)/,'keyword.$#']
+		[/css(?:\s+)?/, 'keyword.css','@>css_selector_start&sel']
+	]
+
+	sel_: [
 		[/(\%)((?:@anyIdentifier)?)/,['style.selector.mixin.prefix','style.selector.mixin']]
 		[/(\@)(\.{0,2}[\w\-]*)/,['style.selector.modifier.prefix','style.selector.modifier']]
 		[/\.([\w\-]+)/,'style.selector.class-name']
@@ -599,26 +602,64 @@ export var states = {
 		[/\[/,'delimiter.selector.attr.open','@css_selector_attr']
 		[/\s+/,'white']
 		[/,/,'style.selector.delimiter']
-		[/#(\s.+)?$/, 'comment']
-		[/^/, '@rematch', '@pop']
+		[/#(\s.+)?\n?$/, 'comment']
 	]
+
+	_css: [
+		denter(null,-1,-1)
+		# denter('@>css_props&rule',-1,-1)
+		[/\s+/,'white']
+		[/(?=@cssPropertyKey)/,'','@css_props']
+		[/(?=[\%\*\w\&\$\>\.\[\@\!]|\#[\w\-])/,'','@css_selector&rule']
+		[/#(\s.+)?\n?$/, 'comment']
+		'expr_'
+	]
+
+	css_selector_start: [
+		[/./,{token: '@rematch', switchTo: '@css_selector', mark: 'sel.start'}]
+	]
+
+	css_props: [
+		denter(null,-1,0)
+		
+		[/(?=@cssPropertyKey)/,'','@css_property&-_prop-_name']
+		[/#(\s.+)?\n?$/, 'comment']
+		[/(?=[\%\*\w\&\$\>\.\[\@\!]|\#[\w\-])/,'','@>css_selector_start&sel']
+		[/\s+/, 'white']
+	]
+
+	css_selector: [
+		denter({switchTo: '@css_props'},{mark:'sel.end'},{mark:'sel.end', switchTo: '@css_props&props'})
+		[/(\}|\)|\])/,'@rematch', '@pop']
+		[/(?=\s*@cssPropertyKey)/,'sel.end',switchTo: '@css_props&props']
+		[/\s*#\s/, '@rematch',switchTo: '@css_props&props',mark:'sel.end']
+		'sel_'
+	]
+
+	css_inline: [
+		[/\]/,'style.close','@pop']
+		[/(?=@cssPropertyKey)/,'','@css_property']
+	]
+
 	css_selector_parens: [
 		[/\)/, 'delimiter.selector.parens.close','@pop']
-		'@css_selector'
+		'sel_'
 	]
 
 	css_selector_attr: [
 		[/\]/, 'delimiter.selector.parens.close','@pop']
-		'@css_selector'
+		'sel_'
 	]
 
 	css_property: [
+		denter(null,-1,-1)
 		[/(\d+)(@anyIdentifier)/, ['style.property.unit.number','style.property.unit.name']]
 		[/((--|\$)@anyIdentifier)/, 'style.property.var']
 		[/(-*@anyIdentifier)/, 'style.property.name']
 		[/(\@+|\.+)(@anyIdentifier\-?)/, ['style.property.modifier.start','style.property.modifier']]
 		[/\+(@anyIdentifier)/, 'style.property.scope']
-		[/\s*([\:]\s*)/, 'style.property.operator',switchTo: '@css_value']
+		[/\s*([\:]\s*)(?=@br|$)/, 'style.property.operator',switchTo: '@>css_multiline_value']
+		[/\s*([\:]\s*)/, 'style.property.operator',switchTo: '@>css_value&_value']
 	]
 
 	css_value_: [
@@ -666,15 +707,17 @@ export var states = {
 	]
 
 	whitespace: [
-		[/[ \t\r\n]+/, 'white'],
+		[/[\r\n]+/, 'br']
+		[/[ \t\r\n]+/, 'white']
 	]
 
 	tag_: [
-		[/(<)(?=\.)/, 'tag.open','@_tag=flag'],
-		[/(<)(?=\w|\{|\[|\%|\#|>)/,'tag.open','@_tag=name']
+		[/(<)(?=\.)/, 'tag.open','@_tag/flag'],
+		[/(<)(?=\w|\{|\[|\%|\#|>)/,'tag.open','@_tag/name']
 	]
 	tag_content: [
 		denter(null,-1,0)
+		[/\)|\}\]/,'@rematch', '@pop']
 		'common_'
 		'flow_'
 		'var_'
@@ -687,7 +730,7 @@ export var states = {
 		
 		[/\/>/,'tag.close','@pop']
 		[/>/,'tag.close',switchTo: '@>tag_content=']
-		[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,'tag.$/.$#']
+		[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,'tag.$/']
 		[/(\-?\d+)/,'tag.$S3']
 		[/(\%)(@anyIdentifier)/,['tag.mixin.prefix','tag.mixin']]
 		[/(\#)(@anyIdentifier)/,['tag.id.prefix','tag.id']]
@@ -710,11 +753,25 @@ export var states = {
 		[/\[/,'style.open', '@css_inline']
 		[/(\s*\=\s*)/,'tag.operator.equals', '@_tag_value']
 		[/\:/,token: 'tag.event.start', switchTo: '@/event']
-		[/\@/,token: 'tag.event.start', switchTo: '@/event']
+		'tag_event_'
+		# [/\@/,token: 'tag.event.start', switchTo: '@/event']
 		[/\{/,token: 'tag.$/.braces.open', next: '@_tag_interpolation/0']
 		[/\(/,token: 'tag.parens.open.$/', next: '@_tag_parens/0']
 		[/\s+/,token: 'white', switchTo: '@/attr']
 		'comment_'
+	]
+	tag_event_: [
+		# add an additional slot for name etc?
+		[/(\@)(@anyIdentifierOpt)/,['tag.event.start','tag.event.name','@_tag_event/$2']]
+	]
+	
+	_tag_part: [
+		[/\)|\}|\]|\>/,'@rematch', '@pop']
+	]
+	_tag_event: [
+		'_tag_part'
+		[/\.(@anyIdentifierOpt)/,'tag.event.modifier']
+		[/\s+/,'@rematch','@pop']
 	]
 	
 	_tag_interpolation: [
@@ -800,7 +857,11 @@ def rewrite-state raw
 
 	for part in raw.split(/(?=[\/\&\=])/)
 		if part[0] == '&'
-			state[2] = part.slice(1)
+			if part[1] == '-' or part[1] == '_'
+				state[2] = '$S3' + part.slice(1)
+			else
+				state[2] = '$S3-' + part.slice(1)
+
 		elif part[0] == '+'
 			state[3] = '$S4-' + part.slice(1)
 		elif part[0] == '='
@@ -935,6 +996,7 @@ export var grammar = {
 	postaccess: /(:(?=\w))?/
 	ivar: /\@[a-zA-Z_]\w*/
 	B: /(?=\s|$)/
+	br:/[\r\n]+/
 	constant: /[A-Z][\w\$]*@subIdentifer/
 	className: /[A-Z][A-Za-z\d\-\_]*|[A-Za-z\d\-\_]+/
 	methodName: /[A-Za-z\_][A-Za-z\d\-\_]*\=?/

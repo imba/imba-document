@@ -12,7 +12,6 @@ export class Token {
 	public readonly type: string;
 	public readonly language: string;
 	public value: string | null;
-	public whitespace: string | null;
 	public scope: any;
 	public stack: any;
 
@@ -21,7 +20,6 @@ export class Token {
 		this.type = type;
 		this.language = language;
 		this.value = null;
-		this.whitespace = null;
 		this.stack = null;
 	}
 

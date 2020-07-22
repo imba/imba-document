@@ -11,8 +11,8 @@ tag hello
 import {body as sample} from './sample'
 import {body as sampleTags} from './sample-tags'
 
-let rawtokens = lexer.tokenize(sample,lexer.getInitialState!,0)
-console.log 'rawtokens',rawtokens
+# let rawtokens = lexer.tokenize(sample,lexer.getInitialState!,0)
+# console.log 'rawtokens',rawtokens
 
 class EditableEvent < CustomEvent
 
@@ -63,7 +63,6 @@ def analyze tokens
 		if typ == 'identifier'
 			
 			if subtyp == 'const' or subtyp == 'let' or subtyp == 'param'
-				# console.log 'register var',value,subtyp
 				scope.vars[value] = token
 				token.vtyp = subtyp
 				token.vvar = token
@@ -80,41 +79,50 @@ def analyze tokens
 
 def highlight tokens
 	let parts = []
-	console.log(tokens)
+	# console.log(tokens)
 	let depth = 0
-	tokens = analyze(tokens)
+	let counter = 0
+	let ids = []
+	# tokens = analyze(tokens)
 
 	for token in tokens
 		let value = token.value
 		let types = token.type.split('.')
 		let [typ,subtyp] = types
 
-		if token.vvar
+		if token.var
+			let id = ids.indexOf(token.var)
+			if id == -1
+				id = ids.push(token.var) - 1
 			types.push('vref')
-			types.push('var'+token.vvar.vid)
-			types.push(token.vvar.vtyp + '-ref')
-			if token.vvar == token
+			types.push('var'+id)
+			types.push(token.var.type + '-ref')
+			if token.var.token == token
 				types.push('decl')
 
-		if token.variable
-			types.push('var')
-			if token.variable.varscope
-				types.push("scope_{token.variable.varscope.type}")
-			if token.variable.modifiers
-				types.push(...token.variable.modifiers)
+		if subtyp == 'start'
+			parts.push("<b class='{typ}'>")
+			continue unless value
+
+		if subtyp == 'end' and !value
+			parts.push('</b>')
+			continue
 
 		if typ == 'push'
 			value = String(++depth)
-			parts.push("<span class='scope _{subtyp} l{depth}'>")
+			let kind = subtyp.indexOf('_') >= 0 ? 'group' : 'scope'
+			let end = token.scope && token.scope.end
+			parts.push("<i class='{kind}-{subtyp.split('_').pop!} _{subtyp} l{depth} o{token.offset} e{end && end.offset}'>")
 			continue
 		elif typ == 'pop'
 			value = String(--depth)
-			parts.push("</span>")
+			parts.push("</i>")
 			continue
 
-		if typ != 'whitez' and typ != 'line'
-			# console.log 'classes',types
-			value = "<span class='{classify types}' data-offset={token.offset}>{escape(value or '')}</span>"
+		if typ != 'white' and typ != 'line'
+			value = "<i class='{classify types} o{token.offset}'>{escape(value or '')}</i>"
+		elif typ == 'white' and value != '\n'
+			value = "<i raw='{JSON.stringify(value)}'>{escape(value or '')}</i>"
 
 		if true
 			yes
@@ -125,7 +133,11 @@ def highlight tokens
 		elif types.indexOf('close') >= 0
 			value = "{value}</span>"
 		
+
 		parts.push(value)
+
+		if subtyp == 'end'
+			parts.push('</b>')
 
 	return parts.join('')
 
@@ -136,9 +148,8 @@ let doc = new ImbaDocument('/source.imba','imba',1,sample)
 let outline = utils.fastExtractSymbols(sample)
 let fullOutline = utils.fastExtractSymbols(sample)
 let x = 1,y = 2
-
-x
-console.log outline
+# console.log outline
+# console.log 'parsed:',doc.parse!
 
 tag outline-part
 
@@ -161,17 +172,28 @@ tag app-root
 			let off = range.cloneRange!
 			off.setStart(document.querySelector('pre code'),0)
 			let loc = off.toString!.length
-			let ctx = doc.getContextAtOffset(loc)
-			let {token,mode,scope} = ctx
-			console.log token
+			let token = doc.tokenAtOffset(loc)
+			let ctx = doc.contextAtOffset(loc)
+			console.log 'got token',token,token.context
+			console.log ctx
+			# return
+			if token.var
+				console.log 'variable',token.var
+
+			# let ctx = doc.getContextAtOffset(loc)
+			# let {token,mode,scope} = ctx
+			# console.log token
 			let stack = []
 			let s = token.stack
 			while s
-				let str = s.state.replace(/\.\t*(?=\.|$)/,do(m) ".{m.length - 1}")
+				# let str = s.state.replace(/\.\t*(?=\.|$)/,do(m) ".{m.length - 1}")
+				let [lexstate,indent = '',scope = '',flags = '',extra = ''] = s.state.split('.')
 				# stack.unshift(str.split('.').slice(0,2).join('.'))
-				stack.unshift(str)
+				stack.push("{lexstate}|{scope.slice(1)}({indent.length})")
+				# stack.unshift(str)
 				s = s.parent
-
+			console.log stack[0] # .join(" -> ")
+			console.log token.stack
 			console.log stack.join(" -> ")
 	
 	def pointerover e
@@ -197,14 +219,16 @@ tag app-root
 	
 	def mount
 		render!
-		$code.innerHTML = highlight(doc.getTokens!)
-		$code2.innerHTML = highlight(rawtokens.tokens)
+		# doc.getTokens!
+		$code.innerHTML = highlight(doc.parse!)
+		console.log 'tokens',doc.tokens
+		# $code2.innerHTML = highlight(rawtokens.tokens)
 			
 	def render
 		<self.hbox.grow[ff:sans] @selectstart=reselected  @pointerover=pointerover>
 			# <button :click.sendCustom> "custom!"
 			<pre> <code$code contentEditable='true' spellcheck=false>
-			<pre> <code$code2 contentEditable='true' spellcheck=false>
+			# <pre> <code$code2 contentEditable='true' spellcheck=false>
 			<h2> "Quick outline"
 			<outline-part data=outline>
 			# <pre> <code innerHTML=highlight(original.getTokens!) contentEditable='true' spellcheck=false>
@@ -235,6 +259,8 @@ global css @root
 	--var-decl: blue3;
 	tab-size: 4;
 
+	i,b fw:500 font-style:normal
+
 	*@focus
 		outline: none
 
@@ -263,6 +289,7 @@ global css @root
 	.identifier color: var(--identifier)
 	.variable color: var(--variable)
 	.string color: var(--string)
+	.path color: var(--string)
 	.propname color: var(--entity)
 	.this,.self color: var(--this)
 	.tag.open,.tag.close color: var(--tag-angle)
@@ -273,7 +300,7 @@ global css @root
 	.unit c:red4
 	.type c:purple5
 	.uppercase c:teal3
-	.decl c:yellow2
+	.decl c:yellow2 .def:green3
 	.style c:purple2 .value:purple4 .property:pink4 .modifier:pink4
 	.selector c:orange3
 	.decorator c:blue5
@@ -281,5 +308,7 @@ global css @root
 	.push outline:1px solid green4 d:inline-block
 	.pop outline:1px solid red4 d:inline-block
 	.highlight bg:yellow3/20
-	.scope bg:gray3/2 .l1:clear
+	.scope bg:gray3/2
+
+	b.sel bg:yellow3/20 br:sm
 

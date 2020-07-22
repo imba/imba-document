@@ -293,6 +293,9 @@ function compileAction(lexer: monarchCommon.ILexerMin, ruleName: string, action:
 			if (typeof (action._pop) === 'string') {
 				newAction._pop = action._pop;
 			}
+			if (typeof (action.mark) === 'string') {
+				newAction.mark = action.mark;
+			}
 			if (typeof (action.fn) === 'string') {
 				newAction.fn = action.fn;
 			}

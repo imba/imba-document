@@ -4,7 +4,6 @@ var Token = (function () {
         this.type = type;
         this.language = language;
         this.value = null;
-        this.whitespace = null;
         this.stack = null;
     }
     Token.prototype.toString = function () {

@@ -1,6 +1,7 @@
 import {computeLineOffsets,getWellformedRange,getWellformedEdit,mergeSort,editIsFull,editIsIncremental} from './utils'
 import { lexer, Token } from './lexer'
 
+import { Root, Scope, Entity, Group } from './scope'
 const newline = String.fromCharCode(172)
 
 const GlobalVars = {
@@ -159,17 +160,8 @@ export class ImbaDocument
 		connection = null
 
 		lineTokens = []
-		tokens = []
-		rootScope = new TokenScope(doc: self, token: {offset: 0, type: 'root'}, type: 'root', line: {indent: -1}, parent: null)
-		head = start = {
-			index: 0
-			line: 0
-			offset: 0
-			type: 'line'
-			state: lexer.getInitialState!
-			context: rootScope
-			match: Token.prototype.match
-		}
+		head = seed = {type: 'eol', offset:0, state: lexer.getInitialState!}
+		tokens = [seed]
 
 	get lineCount
 		lineOffsets.length
@@ -298,12 +290,7 @@ export class ImbaDocument
 		self
 
 	def invalidateFromLine line
-		if head.line >= line
-			let state = lineTokens[Math.max(line - 1,0)] or start
-			if state
-				tokens.length = state.index
-				head = state
-				state.context.reopen!
+		head = seed
 		self
 
 
@@ -371,6 +358,37 @@ export class ImbaDocument
 	def getSemanticTokens
 		getTokens!
 		tokens.filter do !!$1.variable
+
+	def tokenAtOffset offset
+		let tok = tokens[0]
+		while tok
+			let next = tok.next
+			if tok.offset >= offset
+				return tok.prev 
+			
+			# jump through scopes
+			if tok.end and tok.end.offset < offset
+				# console.log 'jumping',tok.offset,tok.end.offset
+				tok = tok.end
+			else
+				tok = next
+		return tok
+
+	def contextAtOffset offset
+		let pos = positionAt(offset)
+		let tok = tokenAtOffset(offset)
+		let linePos = lineOffsets[pos.line]
+		let ctx = {
+			offset: offset
+			position: pos
+			linePos: linePos
+		}
+
+		ctx.textBefore = content.slice(linePos,offset)
+		ctx.textAfter = content.slice(offset,lineOffsets[pos.line + 1])
+		# get the actual lexer state?
+
+		return ctx
 
 	def getContextAtOffset offset, forwardLooking = no
 		let pos = positionAt(offset)
@@ -521,63 +539,102 @@ export class ImbaDocument
 		return context
 		
 
+	def parse
+		let t0 = Date.now!
+		let raw = content
+		let lines = lineOffsets
+
+		let head = seed
+		let tokens = []
+		let prev = head
+		let entity = null
+		let scope = new Root(seed,null,'root')
+
+		for line,i in lines
+			let next = lines[i+1]
+			let str = raw.slice(line,next or raw.length)
+			let lexed = lexer.tokenize(str,head.state,line)
+
+			for tok,ti in lexed.tokens
+				let types = tok.type.split('.')
+				let value = tok.value
+				let [typ,subtyp,sub2] = types
+				
+				if prev
+					prev.next = tok
+					tok.prev = prev
+					tok.context = scope
+
+				if typ == 'push'
+					let idx = subtyp.lastIndexOf('_')
+					let ctor = idx >= 0 ? Group : Scope
+					scope = tok.scope = new ctor(tok,scope,subtyp)
+				elif typ == 'pop'
+					scope = scope.pop(tok)
+				
+				if typ == 'identifier'
+					if subtyp == 'const' or subtyp == 'let' or subtyp == 'param'
+						scope.declare(tok,subtyp)
+					else
+						scope.lookup(tok)
+
+				tokens.push(tok)
+				prev = tok
+
+			head = {state: lexed.endState}
+		
+		console.log 'parsed',tokens.length,Date.now! - t0
+		self.tokens = tokens
+		seed.scope.inspect!
+		return tokens
+
+
 	# This is essentially the tokenizer
 	def getTokens range
-		var codelines = content.split('\n')
+		let raw = content
+		let codelines = content.split('\n') # TODO windows
 
-		var tokens = tokens
-		var t = Date.now!
-		var toLine = range ? range.line : (lineCount - 1)
-		var added = 0
-		var lineCount = lineCount
+		let tokens = tokens
+		let t = Date.now!
+		let toLine = range ? range.line : (lineCount - 1)
+		let added = 0
+		let lineCount = lineCount
+		
+		let toOffset = range ? offsetAt(range) : raw.length
+		console.log 'get tokens to',toOffset
+		let startLine = seed
+
+
 
 		while head.line <= toLine
 			let i = head.line
 			let offset = head.offset
 			let code = codelines[head.line]
 
-			let indent = 0
-			while code[indent] === '\t'
-				indent++
-
 			let lineToken = lineTokens[i] = {
 				offset: offset
 				state: head.state
-				stack: head.state.stack
 				line: i
-				indent: indent
 				type: 'line'
-				meta: head.state.stack
 				lineContent: code
 				match: Token.prototype.match
 				value: i ? '\n' : ''
 				index: tokens.length
-				context: head.context
 			}
-
-			let scope = head.context
-
-			if (code[indent] or i == lineCount) and !lineToken.stack.state.match(/string|regexp/)
-				# Need to track parens etc as well
-				while scope
-					if scope.indent >= indent and !scope.pair
-						scope.end = offset
-						scope.endIndex = lineToken.index
-						scope = scope.parent
-					else
-						break
 
 			tokens.push(lineToken)
 
-			let lexed = lexer.tokenize(code + newline,head.state,offset)
+			let lexed = lexer.tokenize(code,head.state,offset)
 			let lastVarRef = null
 
 			for tok,i in lexed.tokens
 				continue if tok.type == 'newline'
-				# continue if tok.type == 'lookahead.imba'
+
 				let next = lexed.tokens[i + 1]
 				let to = next ? (next.offset - offset) : 1000000
 				let typ = tok.type
+				tokens.push(tok)
+				continue
 
 				let match
 
@@ -619,6 +676,7 @@ export class ImbaDocument
 			[]
 
 		var elapsed = Date.now! - t
+		console.log 'getTokens',elapsed
 		return tokens
 
 
