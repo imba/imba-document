@@ -310,5 +310,6 @@ global css @root
 	.highlight bg:yellow3/20
 	.scope bg:gray3/2
 
-	b.sel bg:yellow3/20 br:sm
+	.group-sel bg:yellow3/10 br:sm
+	.group-prop > .group-name bg:black/10 br:sm
 

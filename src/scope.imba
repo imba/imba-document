@@ -132,6 +132,9 @@ export class Group
 		self.parent = parent
 		return self
 
+	get vars
+		parent.vars
+
 	def pop end
 		end = end
 		end.start = start

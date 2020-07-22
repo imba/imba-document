@@ -1,10 +1,13 @@
-export const body = `
+export const bodyx = `
 
 css div
 	fw:3 t:2
 	fw:500
 	# test
+	em
+		fw:4
 	b d:block
+		fw:3
 		ul fw:500
 	bg:red3 .clear:red5
 	fw:2
@@ -14,8 +17,9 @@ css div
 test
 `
 
-export const bodyX = `
+export const body = `
 
+let ary = ['single',"double",10]
 css div
 	fw:3
 	fw:500
@@ -46,6 +50,42 @@ yes
 css div
 	fw:500
 yes
+
+const f1 = 'desc'
+import \{imp1,imp2,test as imp3\} from './hello'
+
+export class Hello
+
+	def render param
+		[f1,n1]
+		param = param
+
+	def other
+		[1,4,5,3].map do(item,i)
+			if let diff = (item - i)
+				i * 2 + diff
+		yes
+
+	get again
+		[1,2,3]
+
+	def setup
+		def walk item
+			item
+			walk
+		
+		return self
+
+tag Something
+	css div
+		b d:block
+		ul fw:500
+			li fw:400
+				color:red2
+	def render
+		<self>
+			<div @click.prevent.something=log(e,e.test)>
+
 `
 
 export const body4 = `

@@ -549,40 +549,51 @@ export class ImbaDocument
 		let prev = head
 		let entity = null
 		let scope = new Root(seed,null,'root')
+		let log = console.log.bind(console)
+		log = do yes
 
-		for line,i in lines
-			let next = lines[i+1]
-			let str = raw.slice(line,next or raw.length)
-			let lexed = lexer.tokenize(str,head.state,line)
+		try
 
-			for tok,ti in lexed.tokens
-				let types = tok.type.split('.')
-				let value = tok.value
-				let [typ,subtyp,sub2] = types
-				
-				if prev
-					prev.next = tok
-					tok.prev = prev
-					tok.context = scope
+			for line,i in lines
+				let next = lines[i+1]
+				let str = raw.slice(line,next or raw.length)
+				let lexed = lexer.tokenize(str,head.state,line)
 
-				if typ == 'push'
-					let idx = subtyp.lastIndexOf('_')
-					let ctor = idx >= 0 ? Group : Scope
-					scope = tok.scope = new ctor(tok,scope,subtyp)
-				elif typ == 'pop'
-					scope = scope.pop(tok)
-				
-				if typ == 'identifier'
-					if subtyp == 'const' or subtyp == 'let' or subtyp == 'param'
-						scope.declare(tok,subtyp)
-					else
-						scope.lookup(tok)
+				for tok,ti in lexed.tokens
+					let types = tok.type.split('.')
+					let value = tok.value
+					let [typ,subtyp,sub2] = types
 
-				tokens.push(tok)
-				prev = tok
+					tokens.push(tok)
+					
+					if prev
+						prev.next = tok
+						tok.prev = prev
+						tok.context = scope
 
-			head = {state: lexed.endState}
-		
+					if typ == 'push'
+						let idx = subtyp.lastIndexOf('_')
+						let ctor = idx >= 0 ? Group : Scope
+						log " ".repeat(sub2) + tok.type
+						scope = tok.scope = new ctor(tok,scope,subtyp)
+					elif typ == 'pop'
+						log " ".repeat(sub2) + tok.type
+						scope = scope.pop(tok)
+					
+					if typ == 'identifier'
+						if subtyp == 'const' or subtyp == 'let' or subtyp == 'param'
+							scope.declare(tok,subtyp)
+						else
+							scope.lookup(tok)
+
+					
+					prev = tok
+
+				head = {state: lexed.endState}
+		catch e
+			console.log 'parser crashed',e
+			console.log tokens
+
 		console.log 'parsed',tokens.length,Date.now! - t0
 		self.tokens = tokens
 		seed.scope.inspect!

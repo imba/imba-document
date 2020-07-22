@@ -439,7 +439,7 @@ export var states = {
 	string_: [
 		[/"""/, 'string', '@_herestring="""']
 		[/'''/, 'string', '@_herestring=\'\'\'']
-		[/["'`]/, 'string.open','@_string=$#']
+		[/["'`]/, 'string.open','@_string&-_string=$#']
 	]
 
 	number_: [
@@ -585,7 +585,7 @@ export var states = {
 
 	css_: [
 		[/global(?=\s+css@B)/,'keyword.$#']
-		[/css(?:\s+)?/, 'keyword.css','@>css_selector_start&sel']
+		[/css(?:\s+)?/, 'keyword.css','@>css_selector&rule-_sel']
 	]
 
 	sel_: [
@@ -605,34 +605,19 @@ export var states = {
 		[/#(\s.+)?\n?$/, 'comment']
 	]
 
-	_css: [
-		denter(null,-1,-1)
-		# denter('@>css_props&rule',-1,-1)
-		[/\s+/,'white']
-		[/(?=@cssPropertyKey)/,'','@css_props']
-		[/(?=[\%\*\w\&\$\>\.\[\@\!]|\#[\w\-])/,'','@css_selector&rule']
-		[/#(\s.+)?\n?$/, 'comment']
-		'expr_'
-	]
-
-	css_selector_start: [
-		[/./,{token: '@rematch', switchTo: '@css_selector', mark: 'sel.start'}]
-	]
-
 	css_props: [
 		denter(null,-1,0)
-		
 		[/(?=@cssPropertyKey)/,'','@css_property&-_prop-_name']
 		[/#(\s.+)?\n?$/, 'comment']
-		[/(?=[\%\*\w\&\$\>\.\[\@\!]|\#[\w\-])/,'','@>css_selector_start&sel']
+		[/(?=[\%\*\w\&\$\>\.\[\@\!]|\#[\w\-])/,'','@>css_selector&rule-_sel']
 		[/\s+/, 'white']
 	]
 
 	css_selector: [
-		denter({switchTo: '@css_props'},{mark:'sel.end'},{mark:'sel.end', switchTo: '@css_props&props'})
+		denter({switchTo: '@css_props'},-1,{token:'@rematch',switchTo:'@css_props&_props'})
 		[/(\}|\)|\])/,'@rematch', '@pop']
-		[/(?=\s*@cssPropertyKey)/,'sel.end',switchTo: '@css_props&props']
-		[/\s*#\s/, '@rematch',switchTo: '@css_props&props',mark:'sel.end']
+		[/(?=\s*@cssPropertyKey)/,'',switchTo:'@css_props&_props']
+		[/\s*#\s/,'@rematch',switchTo:'@css_props&_props']
 		'sel_'
 	]
 
@@ -658,7 +643,7 @@ export var states = {
 		[/(-*@anyIdentifier)/, 'style.property.name']
 		[/(\@+|\.+)(@anyIdentifier\-?)/, ['style.property.modifier.start','style.property.modifier']]
 		[/\+(@anyIdentifier)/, 'style.property.scope']
-		[/\s*([\:]\s*)(?=@br|$)/, 'style.property.operator',switchTo: '@>css_multiline_value']
+		[/\s*([\:]\s*)(?=@br|$)/, 'style.property.operator',switchTo: '@>css_multiline_value&_value']
 		[/\s*([\:]\s*)/, 'style.property.operator',switchTo: '@>css_value&_value']
 	]
 
