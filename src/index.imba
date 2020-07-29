@@ -1,3 +1,5 @@
 export { ImbaDocument } from './document'
-export { Monarch } from './monarch.imba'
-export { lexer } from './lexer.imba'
+export { Monarch } from './monarch'
+export { lexer } from './lexer'
+
+export { SemanticTokenTypes,SemanticTokenModifiers,Keywords,KeywordTypes,M } from './types'

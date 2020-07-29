@@ -1,8 +1,10 @@
 import {computeLineOffsets,getWellformedRange,getWellformedEdit,mergeSort,editIsFull,editIsIncremental} from './utils'
 import { lexer, Token } from './lexer'
-
-import { Root, Scope, Entity, Group } from './scope'
+import * as util from './utils'
+import { Root, Scope, Group } from './scope'
 const newline = String.fromCharCode(172)
+
+import {SemanticTokenTypes,SemanticTokenModifiers,M} from './types'
 
 const GlobalVars = {
 	'global': 1
@@ -28,125 +30,6 @@ const GlobalVars = {
 	'__filename': 1
 }
 
-const ScopeTypes = {
-	def:   {closure: yes, matcher: /(static)?\s*def ([\w\-\$]+\??)/}
-	get:   {closure: yes, matcher: /(static)?\s*get ([\w\-\$]+\??)/}
-	set:   {closure: yes, matcher: /(static)?\s*set ([\w\-\$]+\??)/}
-	prop:  {closure: yes, matcher: /(static)?\s*prop ([\w\-\$]+\??)/}
-	class: {closure: yes, matcher: /class ([\w\-]+)/ }
-	tag:   {closure: yes, matcher: /tag ([\w\-]+)/ }
-	do:    {closure: no}
-	flow:  {closure: no}
-	root:  {closure: yes}
-	element: {closure: no}
-	value: {closure: no}
-	style: {closure: yes}
-}
-
-const TokenScopeTypes = {
-	'tag.open': 'element',
-	'tag.name.braces.open': 'value',
-	'tag.flag.braces.open': 'value',
-	'style.css.open': 'style'
-}
-
-const TokenPairs = {}
-
-for pair in ['tag.name.braces','tag.data']
-	TokenPairs[pair + '.open'] = TokenPairs[pair + '.close']
-
-const TokenContextRules = [
-	[/(def|set) [\w\$]+[\s\(]/,'params']
-	[/(class) ([\w\-\:]+) <\s?([\w\-]*)$/,'superclass']
-	[/(tag) ([\w\-\:]+) <\s?([\w\-]*)$/,'supertag']
-	[/(def|set|get|prop|attr|class|tag) ([\w\-]*)$/,'naming']
-	[/\<([\w\-\:]*)$/,'tagname']
-	[/\\([\w\-\:]*)$/,'type']
-	# [/\.([\w\-\$]*)$/,'access']
-]
-
-class Variables
-	def constructor scope
-		scope = scope
-		tokens = []
-		map = {}
-	
-	def add token
-		tokens.push(token)
-		token.variable = token
-		token.varscope = scope
-		token.modifiers ||= []
-		map[token.value] = token
-	
-	def lookup name, deep = yes
-		if name[name.length - 1] == '!'
-			name = name.slice(0,-1)
-
-		let res = map.hasOwnProperty(name) and map[name]
-		if deep and !res and scope.parent
-			return scope.parent.variables.lookup(name)
-		if !scope.parent and !res and GlobalVars.hasOwnProperty(name)
-			let tok = {value: name, varscope: scope, modifiers:['global'], type: 'variable.global'}
-			return map[name] = tok.variable = tok
-		return res
-
-class TokenScope
-	def constructor {doc,parent,token,type,line}
-		type = type
-		indent = line.indent
-		start = token.offset
-		token = token
-		end = null
-		endIndex = null
-		variables = new Variables(self)
-
-		if token.type.match(/(\w+)\.open/)
-			pair = token.type.replace('open','close')
-
-		if let m = (meta.matcher and line.lineContent.match(meta.matcher))
-			name = m[m.length - 1]
-			for mod in m.slice(1,-1)
-				self[mod] = true if mod
-		
-
-		parent = parent
-		return self
-	
-	get meta
-		ScopeTypes[type] or ScopeTypes.flow
-
-	def sub token,type,line
-		new TokenScope(doc: null, parent: self, token: token, type: type, line: line)
-
-	get chain
-		let items = [self]
-		let scope = self
-		while scope = scope.parent
-			items.unshift(scope)
-		return items
-	
-	def closest match = null
-		let scope = self
-		while scope
-			let typ = scope.meta
-			if typeof match == 'string'
-				return scope if typ[match] or scope.type == match
-			scope = scope.parent
-		return null
-
-	def reopen
-		end = null
-		endIndex = null
-		parent.reopen! if parent
-		self
-
-	get closure
-		closest('closure')
-		
-	def toJSON
-		{type: type, start: start, end: end}
-
-
 export class ImbaDocument
 
 	static def tmp content
@@ -158,10 +41,12 @@ export class ImbaDocument
 		version = version
 		content = content
 		connection = null
-
 		lineTokens = []
 		head = seed = {type: 'eol', offset:0, state: lexer.getInitialState!}
-		tokens = [seed]
+		tokens = []
+
+	def log ...params
+		console.log(...params)
 
 	get lineCount
 		lineOffsets.length
@@ -291,6 +176,7 @@ export class ImbaDocument
 
 	def invalidateFromLine line
 		head = seed
+		tokens = []
 		self
 
 
@@ -340,6 +226,8 @@ export class ImbaDocument
 		return parts
 
 	def getTokenAtOffset offset,forwardLooking = no
+		return tokenAtOffset(offset)
+
 		let pos = positionAt(offset)
 		getTokens(pos) # ensure that we have tokenized all the way here
 		let line = lineTokens[pos.line]
@@ -356,8 +244,31 @@ export class ImbaDocument
 		return prev or token
 
 	def getSemanticTokens
-		getTokens!
-		tokens.filter do !!$1.variable
+		parse!
+		tokens.filter do !!$1.var
+
+	def getEncodedSemanticTokens
+		let tokens = getSemanticTokens!
+		let out = []
+		let l = 0
+		let o = 0
+		for tok,i in tokens
+			let pos = positionAt(tok.offset)
+			let typ = SemanticTokenTypes.indexOf('variable')
+
+			let mods = tok.mods
+			let line = pos.line
+
+			if tok.var
+				mods |= tok.var.mods
+
+			let dl = pos.line - l
+			let chr = dl ? pos.character : (pos.character - o)
+			out.push(dl,chr,tok.value.length,typ,mods)
+			l = pos.line
+			o = pos.character
+
+		return out
 
 	def tokenAtOffset offset
 		let tok = tokens[0]
@@ -375,28 +286,100 @@ export class ImbaDocument
 		return tok
 
 	def contextAtOffset offset
+		ensureParsed!
+
 		let pos = positionAt(offset)
 		let tok = tokenAtOffset(offset)
 		let linePos = lineOffsets[pos.line]
-		let ctx = {
+		let tokPos = offset - tok.offset
+		let ctx = tok.context
+		let tabs = util.prevToken(tok,"white.tabs")
+		let indent = tabs ? tabs.value.length : 0
+		let scope = ctx.scope
+		let meta = {}
+
+		if tok == tabs
+			indent = tokPos
+
+		while scope.indent > indent
+			scope = scope.parent
+
+		let out = {
+			token: tok
 			offset: offset
 			position: pos
 			linePos: linePos
+			scope: scope
+			indent: indent
+			group: ctx
+			mode: ''
+			path: scope.path
+			textBefore: content.slice(linePos,offset)
+			textAfter: content.slice(offset,lineOffsets[pos.line + 1])
+			before: {
+				token: tok.value.slice(0,tokPos)
+			}
+			after: {
+				token: tok.value.slice(tokPos)
+			}
 		}
 
-		ctx.textBefore = content.slice(linePos,offset)
-		ctx.textAfter = content.slice(offset,lineOffsets[pos.line + 1])
-		# get the actual lexer state?
+		return out
 
-		return ctx
+	def varsAtOffset offset, globals? = no
+		let tok = tokenAtOffset(offset)
+		let vars = []
+		let scope = tok.context.scope
+		let names = {}
+
+		while scope
+			for item in Object.values(scope.varmap)
+				continue if item.type == 'global' and !globals?
+				continue if names[item.name]
+
+				if item.offset < offset
+					vars.push(item)
+					names[item.name] = item
+
+			scope = scope.parent
+		return vars
+
+	def getNavigationTree walker
+		let outline = {
+			children: []
+		}
+		let options = {
+			entities: []
+		}
+		let all = []
+		options.visit = do(item)
+			if item.span
+				item.span.start = positionAt(item.span.offset)
+				item.span.end = positionAt(item.span.offset + item.span.length)
+
+			all.push(item)
+
+			if walker isa Function
+				walker(item)
+			
+		ensureParsed!
+		if seed.scope
+			let res = seed.scope.outline(outline,options)
+			return res
+
+		return outline
 
 	def getContextAtOffset offset, forwardLooking = no
+		return contextAtOffset(offset)
+
 		let pos = positionAt(offset)
 		let token = getTokenAtOffset(offset,forwardLooking)
 		let index = tokens.indexOf(token)
 		let line = lineTokens[pos.line]
 		let prev = tokens[index - 1]
 		let next = tokens[index + 1]
+
+		let tokenOffset = offset - token.offset
 
 		let context = {
 			offset: offset
@@ -537,24 +520,36 @@ export class ImbaDocument
 		
 		context.css = null if Object.keys(context.css).length == 0
 		return context
-		
+			
+
+	def ensureParsed
+		parse! if self.head.offset == 0
+		return self
+
+	def reparse
+		invalidateFromLine(0)
+		parse!
 
 	def parse
+		let head = seed
+
+		if head != self.head
+			return self.tokens
+
 		let t0 = Date.now!
 		let raw = content
 		let lines = lineOffsets
-
-		let head = seed
 		let tokens = []
 		let prev = head
 		let entity = null
 		let scope = new Root(seed,null,'root')
 		let log = console.log.bind(console)
+
 		log = do yes
 
 		try
-
 			for line,i in lines
+				let entityFlags = 0
 				let next = lines[i+1]
 				let str = raw.slice(line,next or raw.length)
 				let lexed = lexer.tokenize(str,head.state,line)
@@ -562,6 +557,7 @@ export class ImbaDocument
 				for tok,ti in lexed.tokens
 					let types = tok.type.split('.')
 					let value = tok.value
+					let nextToken = lexed.tokens[ti + 1]
 					let [typ,subtyp,sub2] = types
 
 					tokens.push(tok)
@@ -571,125 +567,62 @@ export class ImbaDocument
 						tok.prev = prev
 						tok.context = scope
 
+					if typ == 'operator'
+						tok.op = tok.value.trim!
+
+					if typ == 'keyword'
+						if subtyp == 'static'
+							entityFlags |= M.Static
+						elif subtyp == 'export'
+							entityFlags |= M.Export
+					
+					if typ == 'entity'
+						tok.mods |= entityFlags
+						entityFlags = 0
+
 					if typ == 'push'
 						let idx = subtyp.lastIndexOf('_')
 						let ctor = idx >= 0 ? Group : Scope
-						log " ".repeat(sub2) + tok.type
-						scope = tok.scope = new ctor(tok,scope,subtyp)
+						# log " ".repeat(sub2) + tok.type
+						scope = tok.scope = new ctor(tok,scope,subtyp,types)
+						ctor
 					elif typ == 'pop'
-						log " ".repeat(sub2) + tok.type
+						# log " ".repeat(sub2) + tok.type
 						scope = scope.pop(tok)
 					
 					if typ == 'identifier'
 						if subtyp == 'const' or subtyp == 'let' or subtyp == 'param'
 							scope.declare(tok,subtyp)
+						elif subtyp == 'key' and sub2 == 'param'
+							scope.declare(tok,sub2)
 						else
 							scope.lookup(tok)
+							# hardcoded fallback handling
+							if prev && prev.op == '=' and tok.var
+								let lft = prev.prev
+								if lft && lft.var == tok.var
+									if lft.mods & M.Declaration
+										tok.var.dereference(tok)
+									elif !nextToken or nextToken.match('br')
+										lft.var.dereference(lft)
 
-					
 					prev = tok
 
-				head = {state: lexed.endState}
+				head = {state: lexed.endState, offset: (next or content.length)}
 		catch e
 			console.log 'parser crashed',e
-			console.log tokens
-
-		console.log 'parsed',tokens.length,Date.now! - t0
+			# console.log tokens
+		
+		# console.log 'parsed',tokens.length,Date.now! - t0
+		self.head = head
 		self.tokens = tokens
-		seed.scope.inspect!
 		return tokens
 
 
 	# This is essentially the tokenizer
 	def getTokens range
-		let raw = content
-		let codelines = content.split('\n') # TODO windows
-
-		let tokens = tokens
-		let t = Date.now!
-		let toLine = range ? range.line : (lineCount - 1)
-		let added = 0
-		let lineCount = lineCount
-		
-		let toOffset = range ? offsetAt(range) : raw.length
-		console.log 'get tokens to',toOffset
-		let startLine = seed
-
-
-
-		while head.line <= toLine
-			let i = head.line
-			let offset = head.offset
-			let code = codelines[head.line]
-
-			let lineToken = lineTokens[i] = {
-				offset: offset
-				state: head.state
-				line: i
-				type: 'line'
-				lineContent: code
-				match: Token.prototype.match
-				value: i ? '\n' : ''
-				index: tokens.length
-			}
-
-			tokens.push(lineToken)
-
-			let lexed = lexer.tokenize(code,head.state,offset)
-			let lastVarRef = null
-
-			for tok,i in lexed.tokens
-				continue if tok.type == 'newline'
-
-				let next = lexed.tokens[i + 1]
-				let to = next ? (next.offset - offset) : 1000000
-				let typ = tok.type
-				tokens.push(tok)
-				continue
-
-				let match
-
-				if match = tok.type.match(/keyword\.(class|def|set|get|prop|tag|if|for|while|do|elif|unless|try|catch|else|constructor)/)
-					tok.scope = scope = scope.sub(tok,match[1],lineToken)
-				elif TokenScopeTypes[tok.type]
-					tok.scope = scope = scope.sub(tok,TokenScopeTypes[tok.type],lineToken)
-				elif tok.type == scope.pair
-					scope.end = tok.offset
-					scope.endIndex = tokens.length
-					scope = scope.parent
-
-				if tok.type.match(/^variable/)
-					scope.variables.add(tok)
-					lastVarRef = tok
-
-				elif typ.match(/^identifier/) and typ != 'identifier.key'
-					if let variable = scope.variables.lookup(tok.value)
-						tok.variable = variable
-
-						if lastVarRef and lastVarRef.variable == variable
-							let between = code.slice(lastVarRef.offset + lastVarRef.value.length - offset,tok.offset - offset)
-							# console.log 'same variable',lastVarRef,variable,tok,JSON.stringify(between),next
-							if between.match(/^\s*\=\s*$/) and (!next or code.slice(to).match(/^\s*[\,\)]/) or next.type == 'newline')
-								if lastVarRef == variable
-									tok.variable = null
-								else
-									lastVarRef.variable = null
-						
-						lastVarRef = tok
-
-				tokens.push(tok)
-				added++
-
-			head.context = scope
-			head.line++
-			head.offset += code.length + 1
-			head.state = lexed.endState
-			[]
-
-		var elapsed = Date.now! - t
-		console.log 'getTokens',elapsed
+		parse!
 		return tokens
-
 
 	def migrateToImba2
 		let source = self.content

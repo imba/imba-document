@@ -69,6 +69,8 @@ export interface IRule {
 	action: FuzzyAction;
 	matchOnlyAtLineStart: boolean;
 	name: string;
+	stats?: any;
+	string?: string;
 }
 
 export interface IAction {
@@ -140,6 +142,44 @@ export function createError(lexer: ILexerMin, msg: string): Error {
 
 // Helper functions for rule finding and substitution
 
+const substitutionCache:{[key: string]:any} = {};
+
+export function compileSubstitution(str: string): any[] {
+	const parts = [];
+	let i = 0;
+	let l = str.length;
+	let part = '';
+	let sub = 0;
+	while(i < l){
+		let chr = str[i++];
+		if(chr == '$'){
+			let next = str[i++];
+
+			if(next == '$'){
+				part += '$';
+				continue;
+			}
+			if(part) parts.push(part);
+			part = '';
+			if(next == '#'){
+				parts.push(0)
+			}
+			else if(next == 'S'){
+				parts.push(parseInt(str[i++]) + 100)
+			} else {
+				parts.push(parseInt(next) + 1)
+			}
+		} else {
+			part += chr;
+		}
+	}
+	if(part) parts.push(part);
+	substitutionCache[str] = parts;
+	return parts;
+}
+
+
+
 /**
  * substituteMatches is used on lexer strings and can substitutes predefined patterns:
  * 		$$  => $
@@ -150,8 +190,36 @@ export function createError(lexer: ILexerMin, msg: string): Error {
  * See documentation for more info
  */
 export function substituteMatches(lexer: ILexerMin, str: string, id: string, matches: string[], state: string): string {
+	let stateMatches: string[] | null = null;
+	// let otherRes = substituteMatchesOld(lexer,str,id,matches,state);
+	let parts = substitutionCache[str] || compileSubstitution(str);
+	let out = ""
+
+	for(let i = 0;i < parts.length;i++){
+		let part = parts[i];
+		if(typeof part == 'string'){
+			out += part;
+		} else if(part > 100){
+			if (stateMatches === null) stateMatches = state.split('.');
+			out += (stateMatches[part - 101] || '');
+		} else if(part === 100) {
+			out += state
+		}
+		else if(part === 0) {
+			out += id
+		}
+		else if(part > 0) {
+			out += matches[part - 1];
+		}
+	}
+	// if(out !== otherRes){ console.log('mismatch',[str,out,otherRes]); }
+	return out;
+}
+
+export function substituteMatchesOld(lexer: ILexerMin, str: string, id: string, matches: string[], state: string): string {
 	const re = /\$((\$)|(#)|(\d\d?)|[sS](\d\d?)|@(\w+))/g;
 	let stateMatches: string[] | null = null;
+
 	return str.replace(re, function (full, sub?, dollar?, hash?, n?, s?, attr?, ofs?, total?) {
 		if (!empty(dollar)) {
 			return '$'; // $$
@@ -176,14 +244,20 @@ export function substituteMatches(lexer: ILexerMin, str: string, id: string, mat
 	});
 }
 
+const FIND_RULES_MAP:{[key: string]: string} = {};
+
 /**
  * Find the tokenizer rules for a specific state (i.e. next action)
  */
 export function findRules(lexer: ILexer, inState: string): IRule[] | null {
 	let state: string | null = inState;
+	if(FIND_RULES_MAP[state]) {
+		return lexer.tokenizer[FIND_RULES_MAP[state]];
+	}
 	while (state && state.length > 0) {
 		const rules = lexer.tokenizer[state];
 		if (rules) {
+			FIND_RULES_MAP[inState] = state;
 			return rules;
 		}
 

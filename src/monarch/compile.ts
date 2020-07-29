@@ -249,6 +249,7 @@ function compileAction(lexer: monarchCommon.ILexerMin, ruleName: string, action:
 			let newAction: monarchCommon.IAction = { token: action.token };
 			if (action.token.indexOf('$') >= 0) {
 				newAction.tokenSubst = true;
+				// console.log('compiling sub',action.token,monarchCommon.compileSubstitution(action.token));
 			}
 			if (typeof (action.bracket) === 'string') {
 				if (action.bracket === '@open') {
@@ -362,9 +363,12 @@ class Rule implements monarchCommon.IRule {
 	public action: monarchCommon.FuzzyAction = { token: '' };
 	public matchOnlyAtLineStart: boolean = false;
 	public name: string = '';
+	public stats: any;
+	public string?: string;
 
 	constructor(name: string) {
 		this.name = name;
+		this.stats = {time:0,count:0,hits:0};
 	}
 
 	public setRegex(lexer: monarchCommon.ILexerMin, re: string | RegExp): void {
@@ -379,9 +383,14 @@ class Rule implements monarchCommon.IRule {
 			throw monarchCommon.createError(lexer, 'rules must start with a match string or regular expression: ' + this.name);
 		}
 
+		if(sregex.length == 2 && sregex[0] == '\\' && (/[\{\}\(\)\[\]]/).test(sregex[1])){
+			this.string = sregex[1];
+		}
+
 		this.matchOnlyAtLineStart = (sregex.length > 0 && sregex[0] === '^');
 		this.name = this.name + ': ' + sregex;
 		this.regex = compileRegExp(lexer, '^(?:' + (this.matchOnlyAtLineStart ? sregex.substr(1) : sregex) + ')');
+		// this.regex = compileRegExp(lexer, '^' + (this.matchOnlyAtLineStart ? sregex.substr(1) : sregex) + '');
 	}
 
 	public setAction(lexer: monarchCommon.ILexerMin, act: monarchCommon.IAction) {

@@ -20,7 +20,7 @@ export interface ITokenizationSupport {
 	tokenize(line: string, state: IState, offsetDelta: number): TokenizationResult;
 }
 
-const CACHE_STACK_DEPTH = 5;
+const CACHE_STACK_DEPTH = 10;
 
 function statePart(state: string,index: number):string {
 	return state.split('.')[index];
@@ -232,12 +232,9 @@ class MonarchClassicTokensCollector implements IMonarchTokensCollector {
 	}
 
 	public emit(startOffset: number, type: string, stack?: MonarchStackElement): Token {
-		if (this._lastTokenType === type && !this._lastToken.whitespace) {
+		if (this._lastTokenType === type && false){
+			console.log('add to last token',type);
 			return this._lastToken;
-		}
-		// Only if all the content is
-		if(type == 'white'){
-			
 		}
 
 		let token = new Token(startOffset, type, this._language!);
@@ -258,10 +255,12 @@ export class MonarchTokenizer implements ITokenizationSupport {
 
 	private readonly _modeId: string;
 	private readonly _lexer: monarchCommon.ILexer;
+	public _profile: boolean;
 
 	constructor(modeId: string, lexer: monarchCommon.ILexer) {
 		this._modeId = modeId;
 		this._lexer = lexer;
+		this._profile = false;
 	}
 
 	public dispose(): void {
@@ -294,7 +293,7 @@ export class MonarchTokenizer implements ITokenizationSupport {
 		return '(unknown)';
 	}
 
-	private _rescope(from:string,to:string,tokens:string[]):void {
+	private _rescope(from:string,to:string,tokens:string[],toState:string):void {
 		let a = (from || '').split('-'); // if-body
 		let b = (to || '').split('-'); // if
 
@@ -315,7 +314,12 @@ export class MonarchTokenizer implements ITokenizationSupport {
 		}
 		while(b.length > diff) {
 			// console.log('pushing',b[diff]);
-			tokens.push('push.'+b[diff++]+'.'+(diff - 1));
+			let id = 'push.'+b[diff++]+'.'+(diff - 1);
+			if(toState){
+				let indent = statePart(toState,1);
+				id += '.' + indent;
+			}
+			tokens.push(id);
 		}
 	}
 
@@ -327,6 +331,7 @@ export class MonarchTokenizer implements ITokenizationSupport {
 		let stack = lineState.stack;
 		let lastToken:any = null;
 		let pos = 0;
+		let profile = this._profile;
 
 		// regular expression group matching
 		// these never need cloning or equality since they are only used within a line match
@@ -342,12 +347,14 @@ export class MonarchTokenizer implements ITokenizationSupport {
 		let forceEvaluation = true;
 		let append:string[] = [];
 		let tries = 0;
+		let rules: monarchCommon.IRule[] | null = [];
+		let rulesState = null;
 
 		while (forceEvaluation || pos < lineLength) {
 			tries++;
 
-			if(tries > 100){
-				console.log('infinite recursion',stack,tokensCollector);
+			if(tries > 1000){
+				console.log('infinite recursion');
 				throw 'infinite recursion in tokenizer?';
 			}
 
@@ -383,20 +390,40 @@ export class MonarchTokenizer implements ITokenizationSupport {
 
 				forceEvaluation = false;
 
+				// if(state !== rulesState){
 				// get the rules for this state
-				let rules: monarchCommon.IRule[] | null = this._lexer.tokenizer[state];
+				rules = this._lexer.tokenizer[state];
 				if (!rules) {
 					rules = monarchCommon.findRules(this._lexer, state); // do parent matching
 					if (!rules) {
 						throw monarchCommon.createError(this._lexer, 'tokenizer state is not defined: ' + state);
 					}
 				}
-
+				// }
+				
 				// try each rule until we match
 				let restOfLine = line.substr(pos);
 				for (const rule of rules) {
-					if (pos === 0 || !rule.matchOnlyAtLineStart) {
-						matches = restOfLine.match(rule.regex);
+					if(rule.string !== undefined){
+						if(restOfLine[0] === rule.string){
+							matches = [rule.string];
+							matched = rule.string;
+							action = rule.action;
+							break;
+						}
+					}
+					else if (pos === 0 || !rule.matchOnlyAtLineStart) {
+						if(profile){
+							rule.stats.count++;
+							let now = performance.now();
+							matches = restOfLine.match(rule.regex);
+							rule.stats.time += (performance.now() - now);
+							if(matches){
+								rule.stats.hits++;
+							}
+						} else {
+							matches = restOfLine.match(rule.regex);	
+						}
 						if (matches) {
 							matched = matches[0];
 							action = rule.action;
@@ -471,7 +498,7 @@ export class MonarchTokenizer implements ITokenizationSupport {
 					} else {
 						let from = stack.scope;
 						let to = statePart(nextState,2);
-						if(from !== to) this._rescope(from,to,append);
+						if(from !== to) this._rescope(from,to,append,nextState);
 						stack = stack.switchTo(nextState);
 					}
 				} else if (action.transform && typeof action.transform === 'function') {
@@ -492,7 +519,7 @@ export class MonarchTokenizer implements ITokenizationSupport {
 							stack = stack.pop()!;
 							let from = statePart(prev.state,2)
 							let to = statePart(stack.state,2)
-							this._rescope(from,to,append);
+							if(from !== to) this._rescope(from,to,append,stack.state);
 						}
 					} else if (action.next === '@popall') {
 						stack = stack.popall();
@@ -511,7 +538,7 @@ export class MonarchTokenizer implements ITokenizationSupport {
 							throw monarchCommon.createError(this._lexer, 'trying to set a next state \'' + nextState + '\' that is undefined in rule: ' + this._safeRuleName(rule));
 						} else {
 							
-							if(nextScope != stack.scope) this._rescope(stack.scope || '',nextScope,append);
+							if(nextScope != stack.scope) this._rescope(stack.scope || '',nextScope,append,nextState);
 							stack = stack.push(nextState);
 						}
 					}

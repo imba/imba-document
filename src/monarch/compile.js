@@ -301,6 +301,7 @@ var Rule = (function () {
         this.matchOnlyAtLineStart = false;
         this.name = '';
         this.name = name;
+        this.stats = { time: 0, count: 0, hits: 0 };
     }
     Rule.prototype.setRegex = function (lexer, re) {
         var sregex;
@@ -312,6 +313,9 @@ var Rule = (function () {
         }
         else {
             throw monarchCommon.createError(lexer, 'rules must start with a match string or regular expression: ' + this.name);
+        }
+        if (sregex.length == 2 && sregex[0] == '\\' && (/[\{\}\(\)\[\]]/).test(sregex[1])) {
+            this.string = sregex[1];
         }
         this.matchOnlyAtLineStart = (sregex.length > 0 && sregex[0] === '^');
         this.name = this.name + ': ' + sregex;

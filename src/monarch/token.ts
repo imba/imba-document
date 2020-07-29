@@ -14,17 +14,23 @@ export class Token {
 	public value: string | null;
 	public scope: any;
 	public stack: any;
+	public mods: number;
 
 	constructor(offset: number, type: string, language: string) {
 		this.offset = offset | 0;// @perf
 		this.type = type;
 		this.language = language;
+		this.mods = 0;
 		this.value = null;
 		this.stack = null;
 	}
 
 	public toString(): string {
-		return this.value || ''; // '(' + this.offset + ', ' + this.type + ')';
+		return this.value || '';
+	}
+
+	public get span(): object {
+		return {offset: this.offset, length: (this.value ? this.value.length : 0)}
 	}
 
 	public match(val: any): boolean {

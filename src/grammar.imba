@@ -2,6 +2,17 @@ const eolpop = [/^/, token: '@rematch', next: '@pop']
 const repop = { token: '@rematch', next: '@pop'}
 const toodeep = {token: 'white.indent',next: '@>illegal_indent'}
 
+def regexify array, pattern = '#'
+	if typeof array == 'string'
+		array = array.split(' ')
+
+	let items = array.slice!.sort do $2.length - $1.length
+	items = items.map do(item)
+		let escaped = item.replace(/[.*+\-?^${}()|[\]\\]/g, '\\$&')
+		pattern.replace('#',escaped)
+	new RegExp('(?:' + items.join('|') + ')')
+
+
 def denter indent,outdent,stay,reg
 	if indent == null
 		indent = toodeep
@@ -18,8 +29,8 @@ def denter indent,outdent,stay,reg
 	elif stay == 0
 		stay = {}
 
-	indent = Object.assign({token: 'white.indent'},indent or {})
-	stay = Object.assign({token: 'white'},stay or {})
+	indent = Object.assign({token: 'white.tabs'},indent or {})
+	stay = Object.assign({token: 'white.tabs'},stay or {})
 	outdent = Object.assign({ token: '@rematch', next: '@pop'},outdent or {})
 
 	reg ||= /^\t*(?=[^\t\n])/
@@ -29,7 +40,7 @@ def denter indent,outdent,stay,reg
 		'@default': outdent
 	}}]
 
-export var states = {
+export const states = {
 
 	root: [
 		[/^(\t+)(?=[^\t\n])/,{cases: {
@@ -47,11 +58,11 @@ export var states = {
 		[/\$\w+\$/, 'identifier.env']
 		[/\$\d+/, 'identifier.special']
 		# [/(@constant)/, 'identifier.constant.$S4']
-		[/@anyIdentifierPre([\?\!]?)/,cases: {
+		[/@anyIdentifier([\?\!]?)/,cases: {
 			'this': 'this'
 			'self': 'self'
 			'@keywords': 'keyword.$#'
-			'$1~[A-Z].*': 'identifier.uppercase.$F'
+			'$0~[A-Z].*': 'identifier.uppercase.$F'
 			'@default': 'identifier.$F'
 		}]
 	]
@@ -65,10 +76,12 @@ export var states = {
 	]
 
 	block_: [
-		'common_'
+		# 'common_'
+		[/^(\t+)(?=[\r\n]|$)/,'white.tabs']
 		'class_'
 		'tagclass_'
 		'var_'
+		'func_'
 		'import_'
 		'flow_'
 		'for_'
@@ -76,10 +89,16 @@ export var states = {
 		'catch_'
 		'while_'
 		'css_'
+		'tag_'
 		'do_'
-		'func_'
-		'expr_'
 		
+		'expr_'
+		'common_'
+	]
+
+	_indent: [
+		denter('@>_indent&indent',-1,0)
+		'block_'
 	]
 
 	block: [
@@ -91,72 +110,93 @@ export var states = {
 	]
 
 	op_: [
+		[/\s+\:\s+/,'operator.ternary']
+		[/(@unspaced_ops)/,cases: {
+			'@access': 'operator.access'
+			'@default': 'operator'
+		}]
 		[/\&(?=[,\)])/,'operator.special.blockparam']
-		[/@symbols/, cases: {
-			'@operators': 'operator'
-			'@math': 'operator.math'
-			'@logic': 'operator.logic'
-			'@dot': 'operator.dot'
+		[/(\s*)(@symbols)(\s*)/, cases: {
+			'$2@operators': 'operator'
+			'$2@math': 'operator.math'
+			'$2@logic': 'operator.logic'
+			'$2@access': 'operator.access'
 			'@default': 'delimiter'
 		}]
 		[/\&\b/, 'operator']
 	]
 
-	value_: [
+	keyword_: [
+		[/new@B/,'keyword.new']
+		[/and@B|or@B/, 'operator.flow']
+	]
+
+	return_: [
+		[/return@B/,'keyword.new']
+	]
+
+	primitive_: [
 		'string_'
 		'number_'
 		'regexp_'
 		'bool_'
+	]
+
+	value_: [
+		'primitive_'
+		'keyword_'
 		'implicit_call_'
-		'call_'
+		'parens_' # call will always capture?
+		'key_'
 		'access_'
 		'identifier_'
 		'array_'
 		'object_'
-		'parens_'
 	]
 
 	expr_: [
-		'inline_var_'
-		'value_'
 		'comment_'
+		'inline_var_'
+		'return_'
+		'value_'
 		'tag_'
 		'op_'
 		'type_'
 		'spread_'
 	]
-	
+
 	attr_expr_: [
-		'string_'
-		'number_'
-		'regexp_'
-		'bool_'
+		'primitive_'
 		'parens_'
-		'call_'
 		'access_'
 		'identifier_'
 		'array_'
 		'object_'
-		'comment_'
 		'tag_'
 		'op_'
 	]
 
 	access_: [
-		[/(\.)(@anyIdentifier\??)/,cases: {
-			'$2~[A-Z].*': ['operator.dot','access.uppercase']
-			'@default': ['operator.dot','access']
+		[/(\.\.?)(@anyIdentifier\??)/,cases: {
+			'$2~[A-Z].*': ['operator.access','access.uppercase']
+			'@default': ['operator.access','access']
 		}]
 	]
 
 	call_: [
-		[/\(/, '$#', '@call_body']
+		[/\(/, '(', '@call_body']
+	]
+
+	key_: [
+		[/(@anyIdentifier\??)(\:\s*)/,cases: {
+			'@default': ['key','operator.assign.key-value']
+		}]
 	]
 
 	implicit_call_: [
-		[/(\.)(@anyIdentifier\??)@implicitCall/,cases: {
-			'$2~[A-Z].*': ['operator.dot','access.uppercase','@implicit_call_body']
-			'@default': ['operator.dot','access','@implicit_call_body']
+		[/(\.\.?)(@anyIdentifier\??)@implicitCall/,cases: {
+			'$2~[A-Z].*': ['operator.access','access.uppercase','@implicit_call_body']
+			'@default': ['operator.access','access','@implicit_call_body']
 		}]
 		[/(@anyIdentifier\??)@implicitCall/,cases: {
 			'$2~[A-Z].*': ['identifier.uppercase','@implicit_call_body']
@@ -164,12 +204,9 @@ export var states = {
 		}]
 	]
 
-	call_body: [
-		[/\)/, '$#', '@pop']
-		'arglist_'
-	]
 	implicit_call_body: [
 		eolpop
+		[/\)|\}|\]|\>/,'@rematch', '@pop']
 		'arglist_'
 	]
 
@@ -179,71 +216,67 @@ export var states = {
 		[/\s*\,\s*/,'delimiter.comma']
 	]
 
-	# not for 
-	implicit_call2_: [
-		[/@anyIdentifierPre([\?\!]?)/]
-	]
-
 	params_: [
-		# [/\[/, '$#', '@array_body.$S2.param.$S4.param']
-		# [/\{/, '$#', '@object_body.$S2.param.$S4.param']
-		[/\[/, '$#', '@array_body=param']
-		[/\{/, '$#', '@object_body=param']
-		[/(@variable)/,token: 'identifier.param']
+		[/\[/, '[', '@array_body=param']
+		[/\{/, '{', '@object_body=param']
+		[/(@variable)/,'identifier.param']
 		# [/(\s*\=\s*)(?=(for|while|until|if|unless)\s)/,'operator','@pop']
-		[/(\s*\=\s*)/,'operator','@var_value=']
+		'spread_'
+		[/\s*\=\s*/,'operator','@var_value=']
 		[/\s*\,\s*/,'separator']
 	]
 
 	object_: [
-		[/\{/, '$#', '@object_body']
+		[/\{/, '{', '@object_body']
 	]
 
 	parens_: [
-		[/\(/, '$#', '@parens_body']
+		[/\(/, '(', '@parens_body']
 	]
 
 	parens_body: [
-		[/\)/, '$#', '@pop']
+		# [/\)/, ')', '@pop']
+		[/\)/, ')', '@pop']
 		'arglist_'
 	]
 
 	array_: [
-		[/\[/, '$#', '@array_body']
+		[/\[/, '[', '@array_body']
 	]
 
 	array_body: [
-		[/\]@implicitCall/, token: '$#', switchTo: '@implicit_call_body=']
-		[/\]/, '$#', '@pop']
+		[/\]@implicitCall/, token: ']', switchTo: '@implicit_call_body=']
+		[/\]/, ']', '@pop']
 		'expr_'
 		[',','delimiter']
 	]
 
 	object_body: [
-		[/\}/, '$#', '@pop']
-		[/(@anyIdentifier)(\s*:\s*)(@anyIdentifier)/, ['identifier.key','operator.assign.key','identifier.key.$F']]
-		[/(@identifier)/, 'identifier.key.$F']
-		[/\[/, '$#', '@object_dynamic_key=']
-		[/\s*=\s*/,'operator.assign.key','@object_value=']
-		[/:/,'operator.assign.key','@object_value=']
+		[/\}/, '}', '@pop']
+		# [/(@anyIdentifier)(\s*:\s*)(@anyIdentifier)/, ['key','operator.assign.key-value','identifier.$F']]
+		[/(@anyIdentifier)(\s*:\s*)/, ['key','operator.assign.key-value','@object_value']]
+		[/(@anyIdentifier)/, 'identifier.$F']
+		[/\[/, '[', '@object_dynamic_key=']
+		[/\s*=\s*/,'operator.assign','@object_value=']
+		[/:/,'operator.assign.key-value','@object_value=']
 		[/\,/,'delimiter.comma']
 		'expr_'
 	]
 
 	object_value: [
 		eolpop
-		[/(?=,|\})/, 'delimiter', '@pop']
+		# [/(?=,|\})/, 'delimiter', '@pop']
+		[/,|\}|\]|\)/, '@rematch', '@pop']
 		'expr_'
 	]
 
 	object_dynamic_key: [
-		# [']',token: '$$',switchTo: '@$S3_params.$S2.$S3.$S4']
-		[']','$#','@pop']
+		[']',']','@pop']
 		'expr_'
 	]
 
 	comment_: [
-		[/#(\s.+)?$/, 'comment']
+		[/#(\s.+)?(\n|$)/, 'comment']
 	]
 
 	block_comment_: [
@@ -276,12 +309,19 @@ export var states = {
 	]
 
 	do_: [
-		[/(do)(\()/,['keyword.do','$2','@>_do_params&do']]
-		[/do@B/,'keyword.$#','@>_do&do']
+		# [/(do)(\()/,['keyword.do','(','@>_do_params&do']]
+		[/do(?=\()/,'keyword.do','@>do_start&do']
+		[/do@B/,'keyword.do','@>_do&do']
+	]
+
+	do_start: [
+		denter(null,-1,-1)
+		[/\(/,'(',switchTo: '@_do_params']
+		[/./,'@rematch',switchTo:'@_do']
 	]
 
 	_do_params: [
-		[/\)/,'$#',switchTo: '@_do']
+		[/\)/,')',switchTo: '@_do']
 		'params_'
 	]
 
@@ -291,15 +331,16 @@ export var states = {
 	]
 
 	class_: [
-		[/(export|extend)(?=\s+class )/,'keyword.$#']
+		[/(export|extend)(?=\s+class )/,'keyword.$1']
 		[/(class)(\s)(@anyIdentifier)/, ['keyword.$1','white.$1name','entity.$1','@class_start=']]
 	]
 
 	class_start: [
+		# [/[\r\n]/,'@rematch',switchTo: '@>_class&class=']
 		[/(\s+\<\s+)(@anyIdentifier)/,['keyword.extends','identifier.superclass']]
-		[/#(\s.+)?$/, 'comment']
+		[/#(\s.+)?$/, 'comment',switchTo: '@>_class&class=']
 		[/^/,'@rematch',switchTo: '@>_class&class=']
-		denter({switchTo: '@>_class&class='},-1,-1)
+		# denter({switchTo: '@>_class&class='},-1,-1) # should be no need for a denter here
 	]
 
 	tagclass_: [
@@ -316,11 +357,12 @@ export var states = {
 	]
 
 	import_: [
-		[/(import)(?=\s+['"])/,'keyword.import','@import_source']
-		[/(import|export)@B/,'keyword.import','@import_body']
+		[/(import)(?=\s+['"])/,'keyword.import','@>import_source']
+		[/(import|export)@B/,'keyword.import','@>import_body']
 	]
 
 	import_body: [
+		denter(null,-1,0)
 		[/(\*)(\s+as\s+)(@esmIdentifier)/, ['keyword.star','keyword.as','identifier.const.import']]
 		[/(@esmIdentifier)(\s+as\s+)(@esmIdentifier)/, ['alias','keyword.as','identifier.const.import']]
 		[/from/, 'keyword.from',switchTo: '@import_source']
@@ -329,14 +371,14 @@ export var states = {
 	]
 
 	esm_specifiers: [
-		[/\}/, '$S2.close', '@pop']
-		[/(@esmIdentifier)(\s+as\s+)(@esmIdentifier)/, ['alias','keyword.as','identifier.const.import']]
+		[/\}/, '$/.close', '@pop']
+		[/(@esmIdentifier)(\s+as\s+)(@esmIdentifier)/, ['alias','keyword.as','identifier.const.$/']]
 		[/(@esmIdentifier)/, 'identifier.const.$/']
 		[/\s*\,\s*/,'delimiter.comma']
 	]
 
 	import_source: [
-		denter(null,-1,-1)
+		denter(null,-1,0)
 		[/["']/, 'start.path','@_path=$#']
 	]
 	_path: [
@@ -346,17 +388,16 @@ export var states = {
 		[/\{/, 'invalid']
 		[/["'`]/, cases: { '$#==$F': { token: 'end.path', next: '@pop' }, '@default': 'path' }]
 	]
-
-	
 	
 	def_: [
-		[/static(?=\s+(get|set|def) )/,'keyword.$#'] # only in class and tagclass?
-		[/(def|get|set)(\s)(@anyIdentifier)/, ['keyword.$1','white.entity','entity.$1.$3','@def_params&$1/$1']]
+		[/static(?=\s+(get|set|def) )/,'keyword.static'] # only in class and tagclass?
+		[/(def|get|set)(\s)(@anyIdentifier)/, ['keyword.$1','white.entity','entity.$1.$3','@>def_params&$1/$1']]
 		[/(def|get|set)(\s)(\[)/, ['keyword.$1','white','$$','@def_dynamic_name/$1']]
 	]
 
 	func_: [
-		[/(def)(\s)(@anyIdentifier)/, ['keyword.$1','white.entity','entity.$1.$3','@def_params&$1/$1']]
+		[/export(?=\s+(get|set|def) )/,'keyword.export'] # only in class and tagclass?
+		[/(def)(\s)(@anyIdentifier)/, ['keyword.$1','white.entity','entity.$1.$3','@>def_params&$1/$1']]
 	]
 	
 	flow_: [
@@ -385,8 +426,8 @@ export var states = {
 
 	for_start: [
 		denter({switchTo: '@>for_body'},-1,-1)
-		[/\[/, '$#', '@array_body']
-		[/\{/, '$#', '@object_body']
+		[/\[/, '[', '@array_body']
+		[/\{/, '{', '@object_body']
 		[/(@variable)/,'identifier.$F']
 		[/(\s*\,\s*)/,'separator']
 		[/\s(in|of)@B/,'keyword',switchTo: '@for_source=']
@@ -407,7 +448,7 @@ export var states = {
 	]
 
 	_decorator_params: [
-		[/\)/,'$#','@pop']
+		[/\)/,')','@pop']
 		'params_'
 	]
 
@@ -420,7 +461,7 @@ export var states = {
 	_field_1: [
 		denter(null,-1,-1)
 		'type_'
-		[/(\s*=\s*)/,['operator.assign','@>_field_value']]
+		[/(\s*=\s*)/,['operator','@>_field_value']]
 	]
 
 	_field_value: [
@@ -439,7 +480,7 @@ export var states = {
 	string_: [
 		[/"""/, 'string', '@_herestring="""']
 		[/'''/, 'string', '@_herestring=\'\'\'']
-		[/["'`]/, 'string.open','@_string&-_string=$#']
+		[/["'`]/, 'string.open','@_string=$#']
 	]
 
 	number_: [
@@ -491,6 +532,7 @@ export var states = {
 		'comment_'
 		'field_'
 		'decorator_'
+		'common_'
 	]
 
 	_tagclass: [
@@ -500,13 +542,16 @@ export var states = {
 	]
 
 	def_params: [
-		denter({switchTo: '@>_def'},-1,-1)
-		[/\[/, '$#', '@array_body=param']
-		[/\{/, '$#', '@object_body=param']
-		[/(@variable)/,'identifier.param']
-		'spread_'
-		[/(\s*\=\s*)/,'operator','@var_value=']
-		[/\s*\,\s*/,'separator']
+		# denter({switchTo: '@>_def'},-1,{switchTo: '@>_def'})
+		[/\(/,'(','@def_parens']
+		[/^/,'@rematch',switchTo:'@_def']
+		[/do@B/,'keyword.do',switchTo:'@_def']
+		'params_'
+	]
+
+	def_parens: [
+		[/\)/,')','@pop']
+		'params_'
 	]
 
 	def_dynamic_name: [
@@ -515,11 +560,9 @@ export var states = {
 	]
 
 	_def: [
-		denter(toodeep,-1,0)
+		denter('@>_indent&indent',-1,0)
 		'block_'
 	]
-
-	
 
 	_flow: [
 		denter(toodeep,-1,0)
@@ -528,17 +571,18 @@ export var states = {
 
 	_varblock: [
 		denter(1,-1,-1)
-		[/\[/, '$#', '@array_body']
-		[/\{/, '$#', '@object_body']
+		[/\[/, '[', '@array_body']
+		[/\{/, '{', '@object_body']
 		[/(@variable)/,'identifier.$F']
-		[/(\s*\,\s*)/,'separator']
+		[/\s*\,\s*/,'separator']
 		[/(\s*\=\s*)(?=(for|while|until|if|unless)\s)/,'operator','@pop']
 		[/(\s*\=\s*)/,'operator','@var_value=']
+		'type_'
 	]
 
 	inline_var_body: [
-		[/\[/, '$#', '@array_body']
-		[/\{/, '$#', '@object_body']
+		[/\[/, '[', '@array_body']
+		[/\{/, '{', '@object_body']
 		[/(@variable)/,'identifier.$F']
 		[/(\s*\=\s*)/,'operator',switchTo: '@var_value=ident']
 	]
@@ -547,10 +591,12 @@ export var states = {
 		[/(?=,|\))/, 'delimiter', '@pop']
 		denter({switchTo: '@>block'},-1,-1)
 		# denter({switchTo: 1},-1,-1)
+		'do_'
 		'expr_'
 	]
 
 	common_: [
+		[/^(\t+)(?=\n|$)/,'white.tabs']
 		'@whitespace'
 	]
 
@@ -559,12 +605,13 @@ export var states = {
 	]
 
 	type_: [
-		[/\\/, 'type.start','@_type/0']
+		[/\\/, '@rematch','@_type&-_type/0']
 	]
 
 	_type: [
 		denter(null,-1,-1)
-		[/\[/,'type.$#','@/]']
+		[/\\/,'type.delim']
+		[/\[/,'type','@/]']
 		[/\(/,'type','@/)']
 		[/\{/,'type','@/}']
 		[/\</,'type','@/>']
@@ -623,7 +670,7 @@ export var states = {
 
 	css_inline: [
 		[/\]/,'style.close','@pop']
-		[/(?=@cssPropertyKey)/,'','@css_property']
+		[/(?=@cssPropertyKey)/,'','@css_property&-_prop-_name']
 	]
 
 	css_selector_parens: [
@@ -711,10 +758,15 @@ export var states = {
 		# dont support object keys directly here
 	]
 
+	tag_children: [
+
+	]
+
 	_tag: [
 		
 		[/\/>/,'tag.close','@pop']
-		[/>/,'tag.close',switchTo: '@>tag_content=']
+		# [/>/,'tag.close',switchTo: '@tag_content=']
+		[/>/,'tag.close','@pop']
 		[/(\-?@tagIdentifier)(\:@anyIdentifier)?/,'tag.$/']
 		[/(\-?\d+)/,'tag.$S3']
 		[/(\%)(@anyIdentifier)/,['tag.mixin.prefix','tag.mixin']]
@@ -736,7 +788,7 @@ export var states = {
 
 		[/\{/,'tag.$/.braces.open', '@_tag_interpolation']
 		[/\[/,'style.open', '@css_inline']
-		[/(\s*\=\s*)/,'tag.operator.equals', '@_tag_value']
+		[/(\s*\=\s*)/,'tag.operator.equals', '@_tag_value&-value']
 		[/\:/,token: 'tag.event.start', switchTo: '@/event']
 		'tag_event_'
 		# [/\@/,token: 'tag.event.start', switchTo: '@/event']
@@ -756,6 +808,7 @@ export var states = {
 	_tag_event: [
 		'_tag_part'
 		[/\.(@anyIdentifierOpt)/,'tag.event.modifier']
+		[/(\s*\=\s*)/,'tag.operator.equals', '@_tag_value&handler']
 		[/\s+/,'@rematch','@pop']
 	]
 	
@@ -932,10 +985,7 @@ for own key,rules of states
 
 		continue
 
-console.log 'new states',states
-window.SS = states
-
-export var grammar = {
+export const grammar = {
 	defaultToken: 'invalid',
 	ignoreCase: false,
 	tokenPostfix: '',
@@ -964,19 +1014,21 @@ export var grammar = {
 		'&', '|', '^', '%', '<<','!&',
 		'>>', '>>>', '+=', '-=', '*=', '/=', '&=', '|=', '?=',
 		'^=', '%=', '~=', '<<=', '>>=', '>>>=','..','...','||=',`&&=`,'**=','**',
-		'|=?','~=?','^=?','=?'
+		'|=?','~=?','^=?','=?','and','or'
 	],
 	logic: [
 		'>', '<', '==', '<=', '>=', '!=', '&&', '||','===','!=='
 	],
-	ranges: ['..','...'],
-	dot: ['.'],
-	math: [
-		'+', '-', '*', '/', '++', '--'
-	],
+	ranges: ['..','...']
+	dot: ['.']
+	access: ['.','..']
+	math: ['+', '-', '*', '/', '++', '--'],
+
+	unspaced_ops: regexify('. .. + * / ++ --')
 
 	# we include these common regular expressions
-	symbols: /[=><!~?&%|+\-*\/\^\.,\:]+/,
+	symbols: /[=><!~?&%|+\-*\/\^,]+/,
+	fallbackSymbols: /[=><!~?&%|+\-*\/\^\.,\:]+/,
 	escapes: /\\(?:[abfnrtv\\"'$]|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 	postaccess: /(:(?=\w))?/
 	ivar: /\@[a-zA-Z_]\w*/
@@ -986,19 +1038,20 @@ export var grammar = {
 	className: /[A-Z][A-Za-z\d\-\_]*|[A-Za-z\d\-\_]+/
 	methodName: /[A-Za-z\_][A-Za-z\d\-\_]*\=?/
 	subIdentifer: /(?:\-*[\w\$]+)*/
-	id: /@anyIdentifierPre([\?\!]?)/
+	# id: /@anyIdentifierPre([\?\!]?)/
 	identifier: /[a-z_]@subIdentifer/
 	mixinIdentifier: /\%[a-z_]@subIdentifer/
-	anyIdentifier: /[A-Za-z_\$][\w\$]*@subIdentifer/
-	anyIdentifierOpt: /(?:[A-Za-z_\$][\w\$]*@subIdentifer)?/
-	anyIdentifierPre: /([A-Za-z_\$])[\w\$]*@subIdentifer/
+	# anyIdentifier: /[A-Za-z_\$][\w\$]*@subIdentifer/
+	anyIdentifier: /[A-Za-z_\$][\w\$]*(?:\-+[\w\$]+)*/
+	anyIdentifierOpt: /(?:@anyIdentifier)?/
+	# anyIdentifierPre: /([A-Za-z_\$])[\w\$]*(?:\-+[\w\$]+)*/
 	esmIdentifier: /[\@\%]?[A-Za-z_\$]@subIdentifer/
 	propertyPath: /(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*\.)?(?:[A-Za-z_\$][A-Za-z\d\-\_\$]*)/
 	tagNameIdentifier: /(?:[\w\-]+\:)?\w+(?:\-\w+)*/
 	variable: /[\w\$]+(?:-[\w\$]*)*\??/
 	varKeyword: /var|let|const/
 	tagIdentifier: /-*[a-zA-Z][\w\-]*/
-	implicitCall: /(?=\s[\w\'\"\/\[\{])/ # not true for or etc
+	implicitCall: /(?!\s(?:and|or)\s)(?=\s[\w\'\"\/\[\{])/ # not true for or etc
 	cssPropertyKey: /[\@\.]*[\w\-\$]+(?:[\@\.]+[\w\-\$]+)*(?:\s*\:)/
 	cssVariable: /(?:--|\$)[\w\-\$]+/
 	cssPropertyName: /[\w\-\$]+/

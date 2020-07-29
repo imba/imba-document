@@ -3,12 +3,20 @@ var Token = (function () {
         this.offset = offset | 0;
         this.type = type;
         this.language = language;
+        this.mods = 0;
         this.value = null;
         this.stack = null;
     }
     Token.prototype.toString = function () {
         return this.value || '';
     };
+    Object.defineProperty(Token.prototype, "span", {
+        get: function () {
+            return { offset: this.offset, length: (this.value ? this.value.length : 0) };
+        },
+        enumerable: true,
+        configurable: true
+    });
     Token.prototype.match = function (val) {
         if (typeof val == 'string') {
             if (val.indexOf(' ') > 0) {

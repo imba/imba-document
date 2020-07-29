@@ -5,10 +5,11 @@ export def matchToken token, match
 	elif typeof match == 'string'
 		return typ.indexOf(match) == 0 and (!typ[match.length] or typ[match.length] == '.')
 
-export def prevToken start, match
+export def prevToken start, match, max = 100000
 	let tok = start
-	while tok
+	while tok and max > 0
 		return tok if matchToken(tok,match)
+		max--
 		tok = tok.prev
 	return null
 
@@ -82,6 +83,7 @@ export def fastExtractSymbols text
 	let root = scope
 	# symbols.root = scope
 	let m
+	let t0 = Date.now!
 
 	for line,i in lines
 		if line.match(/^\s*$/)
@@ -141,4 +143,5 @@ export def fastExtractSymbols text
 			symbols.push(symbol)
 	
 	root.all = symbols
+	console.log 'fast outline',text.length,Date.now! - t0
 	return root
